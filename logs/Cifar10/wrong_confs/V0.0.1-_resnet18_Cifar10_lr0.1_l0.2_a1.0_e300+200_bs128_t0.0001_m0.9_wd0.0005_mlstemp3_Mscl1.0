@@ -1,0 +1,19 @@
+V0.0.1-_resnet18_Cifar10_lr0.1_l0.2_a1.0_e300+200_bs128_t0.0001_m0.9_wd0.0005_mlstemp3_Mscl1.0
+Files already downloaded and verified
+M values:
+ {Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.5487061738967896, Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.3523094356060028, Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.21628862619400024, Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.18689115345478058, Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.14327552914619446, Conv2d(64, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False): 0.12737567722797394, Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.11029236763715744, Conv2d(64, 128, kernel_size=(1, 1), stride=(2, 2), bias=False): 0.2971794605255127, Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.09336047619581223, Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.11640232801437378, Conv2d(128, 256, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False): 0.1180206686258316, Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.09721729904413223, Conv2d(128, 256, kernel_size=(1, 1), stride=(2, 2), bias=False): 0.1253737211227417, Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.11488018184900284, Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.08681126683950424, Conv2d(256, 512, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False): 0.08893948793411255, Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.0640970766544342, Conv2d(256, 512, kernel_size=(1, 1), stride=(2, 2), bias=False): 0.08375772833824158, Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.06052006036043167, Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.017058581113815308, Linear(in_features=512, out_features=100, bias=True): 0.39575180411338806}
+current lr 1.00000e-01
+Traceback (most recent call last):
+  File "/local1/caccmatt/Pruning_prj/grid_search.py", line 154, in <module>
+    main()
+  File "/local1/caccmatt/Pruning_prj/grid_search.py", line 151, in main
+    grid_search.run()
+  File "/local1/caccmatt/Pruning_prj/grid_search.py", line 133, in run
+    trainer.train(epochs, finetuning_epochs)
+  File "/local1/caccmatt/Pruning_prj/trainer.py", line 50, in train
+    self.run_epoch(epoch)
+  File "/local1/caccmatt/Pruning_prj/trainer.py", line 221, in run_epoch
+    loss, regTerm = self.reg(self.model, loss, self.lamb)
+  File "/local1/caccmatt/Pruning_prj/perspReg.py", line 12, in myReg
+    const=(torch.sqrt(torch.Tensor([alpha/(1-alpha)]))).cuda()
+ZeroDivisionError: float division by zero

@@ -1,4 +1,6 @@
 import resnet
+import resnetBig
+import vgg
 from torch.nn.utils import prune
 import torch
 import torchvision.models as models
@@ -8,7 +10,7 @@ model_names = sorted(name for name in resnet.__dict__
                      and name.startswith("resnet")
                      and callable(resnet.__dict__[name]))
 
-available_arcs= model_names + ["resnet18", "resnet50"]
+available_arcs= model_names + ["resnet18", "resnet50", "vgg16"]
 
 def is_available(name):
     return name in available_arcs
@@ -18,10 +20,20 @@ def load_arch(name, num_classes, resume = "", already_pruned = True):
         print("Architecture requested not available")
         return None
 
-    if name in model_names:
-        model = torch.nn.DataParallel(resnet.__dict__[name](num_classes))
+    if num_classes <=100:
+        if name in model_names:
+            model = torch.nn.DataParallel(resnet.__dict__[name](num_classes))
+        else:
+            if "vgg" in name:
+                model = vgg.__dict__[name]()
+            else:
+                model = resnetBig.__dict__[name](num_classes)
     else:
         model = models.__dict__[name]()
+      
+            
+
+    
     model.cuda()
 
     

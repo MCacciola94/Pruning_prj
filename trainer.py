@@ -79,7 +79,8 @@ class Trainer():
 
 
         print("\n Elapsed time for training ", datetime.now()-start)
-
+        if self.lamb == 0.0:
+            return 0
 
         spars, tot_p = at.sparsityRate(self.model)
         # i=0
@@ -126,7 +127,7 @@ class Trainer():
         for m in self.model.modules():
             if isinstance(m,torch.nn.Conv2d):
                 for i in range(m.out_channels):
-                        if m.weight_mask[i,:].sum()/m.weight_mask[i,:].numel()>0.05:
+                        if m.weight_mask[i,:].sum()/m.weight_mask[i,:].numel()>0.0001:
                             m.weight_mask[i,:]=1
                         else:
                             m.weight_mask[i,:]=0
@@ -188,7 +189,7 @@ class Trainer():
 
 
 
-    def run_epoch(self, epoch, reg_on = True):
+    def run_epoch(self, epoch, reg_on = True, print_grad = True):
         """
             Run one train epoch
         """
@@ -223,6 +224,13 @@ class Trainer():
             # compute gradient and do SGD step
             self.optimizer.zero_grad()
             loss.backward()
+            if print_grad and i==0:
+                grad=0
+                for _,w in self.model.named_parameters():
+                    if w.requires_grad:
+                        grad += torch.norm(w.grad,2)**2
+                print("Grad= ", grad)
+
             self.optimizer.step()
 
             output = output.float()

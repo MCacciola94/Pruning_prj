@@ -23,7 +23,9 @@ milestones_dict = {"emp1": [120, 200, 230, 250, 350, 400, 450],
                     "emp2": [35, 70, 105, 140, 175, 210, 245, 280, 315],
                     "emp3": [100, 250, 350, 400, 450], 
                     "emp4": [200, 250, 350, 400, 450],
-                    "emp5": [200, 400]} 
+                    "emp5": [200, 400],
+                    "emp6": [75, 150, 250],
+                    "emp7": [100, 150]} 
 
 parser = argparse.ArgumentParser(description='Pruning using SPR term')
 parser.add_argument('--config', '-c',
@@ -99,19 +101,21 @@ class Grid_Search():
                     lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
                                                                         milestones=milestones_dict[milestones], last_epoch= - 1)
 
+                    if lamb == 0.0 and alpha == 0.0:
+                        reg = at.noReg
+                    else:
+                        #Creating the perspective regualriation function
+                        #Compute M values for each layer using a trained model 
+                        torch.save(model.state_dict(),name + "rand_init.ph")
+                        base_checkpoint=torch.load("saves/save_" + arch + "_" + dset + "_first_original/checkpoint.th")
+                        model.load_state_dict(base_checkpoint['state_dict'])
+                        M=at.layerwise_M(model, scale = M_scale) #a dictionary withe hte value of M for each layer of the model
+                        model.load_state_dict(torch.load(name  + "rand_init.ph"))
+                        os.remove(name + "rand_init.ph")
 
-                    #Creating the perspective regualriation function
-                    #Compute M values for each layer using a trained model 
-                    torch.save(model.state_dict(),name + "rand_init.ph")
-                    base_checkpoint=torch.load("saves/save_" + arch + "_" + dset + "_first_original/checkpoint.th")
-                    model.load_state_dict(base_checkpoint['state_dict'])
-                    M=at.layerwise_M(model, scale = M_scale) #a dictionary withe hte value of M for each layer of the model
-                    model.load_state_dict(torch.load(name  + "rand_init.ph"))
-                    os.remove(name + "rand_init.ph")
-
-                    print("M values:\n",M)
-                    
-                    reg = (pReg.myTools(alpha=alpha,M=M)).myReg 
+                        print("M values:\n",M)
+                        
+                        reg = (pReg.myTools(alpha=alpha,M=M)).myReg 
 
 
 

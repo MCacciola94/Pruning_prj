@@ -82,6 +82,7 @@ def create_csv(path = "logs/resnet20"):
 
 
     table_cols = dict(table_cols)
+    #breakpoint()
     table_cols_df = pd.DataFrame(table_cols)
     table_cols_df = table_cols_df.astype({"batch_size": int})
     table_cols_df.to_csv(path + "/" + "Full_tab.csv", sep = "\t", index = False)
@@ -95,7 +96,7 @@ def write_small_tab(path, name, cols = ["lambda", "alpha", "Final_Accuracy", "Sp
 def take_par_and_val(s):
     for k, v in param_dict.items():
         n = len(v)
-        if s[:n] == v and ((s[n:].replace(".", "")).isnumeric() or (v == "e" and "+" in s[n:])):
+        if s[:n] == v and ((s[n:].replace(".", "")).isnumeric() or (v == "e" and "+" in s[n:]) or ("1e" in s[n:])):
             return k, s[n:]
 
     return "not_found", None

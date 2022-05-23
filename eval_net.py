@@ -84,51 +84,51 @@ def prune_block_channels(block):
              
             
 
+def go():
+
+    parser = argparse.ArgumentParser(description='evaluation of pruned net')
+    parser.add_argument('--name',
+                        help="Name of checkpoint")
+
+    args = parser.parse_args()
+    model = archs.load_arch("resnet20", 10)
+    qp.prune_thr(model,1.e-12)
+    base_checkpoint=torch.load("saves/save_" + args.name +"/checkpoint.th")
+    model.load_state_dict(base_checkpoint['state_dict'])
+    dataset = dl.load_dataset("Cifar10", 128)
+    # define loss function (criterion) and optimizer
+    criterion = nn.CrossEntropyLoss().cuda()
 
 
-parser = argparse.ArgumentParser(description='evaluation of pruned net')
-parser.add_argument('--name',
-                    help="Name of checkpoint")
+    optimizer = torch.optim.SGD(model.parameters(), 0.1,
+                                momentum=0.9,
+                                weight_decay=5.e-4)
 
-args = parser.parse_args()
-model = archs.load_arch("resnet20", 10)
-qp.prune_thr(model,1.e-12)
-base_checkpoint=torch.load("saves/save_" + args.name +"/checkpoint.th")
-model.load_state_dict(base_checkpoint['state_dict'])
-dataset = dl.load_dataset("Cifar10", 128)
-# define loss function (criterion) and optimizer
-criterion = nn.CrossEntropyLoss().cuda()
+    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+                                                        milestones=[300], last_epoch= - 1)
 
 
-optimizer = torch.optim.SGD(model.parameters(), 0.1,
-                            momentum=0.9,
-                            weight_decay=5.e-4)
+    trainer = Trainer(model = model, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, 
+                                            criterion =criterion, optimizer = optimizer, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
 
-lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-                                                    milestones=[300], last_epoch= - 1)
+    trainer.validate(reg_on = False)
+    _, a = at.sparsityRate(model)
+    b = pruned_par(model)
+    tot = par_count(model)
 
+    for m in model.modules():
+        prune_block_channels(m)
 
-trainer = Trainer(model = model, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, 
-                                        criterion =criterion, optimizer = optimizer, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
+    #print(model)
+    #new_tot = par_count(model)
+    trainer.validate(reg_on = False)
 
-trainer.validate(reg_on = False)
-_, a = at.sparsityRate(model)
-b = pruned_par(model)
-tot = par_count(model)
-
-for m in model.modules():
-    prune_block_channels(m)
-
-#print(model)
-#new_tot = par_count(model)
-trainer.validate(reg_on = False)
-
-_, a_new = at.sparsityRate(model)
-b_new = pruned_par(model)
-print("tot ",tot)
-#print("new_tot ", new_tot)
-print(a)
-print(a_new)
-print(b)
-print(b_new)
-print((b_new-b)/tot)
+    _, a_new = at.sparsityRate(model)
+    b_new = pruned_par(model)
+    print("tot ",tot)
+    #print("new_tot ", new_tot)
+    print(a)
+    print(a_new)
+    print(b)
+    print(b_new)
+    print((b_new-b)/tot)
