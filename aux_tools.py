@@ -15,7 +15,15 @@ class ThresholdPruning(prune.BasePruningMethod):
 
 
 #Computing sparsity information of the model
-def sparsityRate(model,verb=False,opt="channels"):
+def sparsityRate(model,verb_lev=-1,opt="channels"):
+    # breakpoint()
+
+    #retrocompatible with previous version
+    if verb_lev==False:
+        verb_lev=0
+    elif verb_lev== True:
+        verb_lev=1
+
     out=[]
     tot_pruned=0
     tot_struct_pruned=0
@@ -31,9 +39,9 @@ def sparsityRate(model,verb=False,opt="channels"):
                     tot_struct_pruned+=m.in_features
                     
                 
-            if verb:
+            if verb_lev==1:
                 print("in module ",m,"\n sparsity of  ", v)
-            else:
+            elif verb_lev==0:
                 print("\n sparsity of  ", v)
             out=out+[v]
 
@@ -49,9 +57,9 @@ def sparsityRate(model,verb=False,opt="channels"):
                     if el==1.0:
                         tot_struct_pruned+=m.kernel_size[0]*m.kernel_size[1]*m.in_channels
 
-                if verb:
+                if verb_lev==1:
                     print("in module ",m,"\n sparsity of  ", v)
-                else:
+                elif verb_lev==0:
                     print("\n sparsity of  ", v)
                 out=out+[v]
             else:
@@ -65,7 +73,9 @@ def sparsityRate(model,verb=False,opt="channels"):
                         if el==1.0:
                             tot_struct_pruned+=m.kernel_size[0]*m.kernel_size[1]
 
-                        if verb:
+                        if verb_lev==1:
+                            print("in module ",m,"\n sparsity of  ", v)
+                        elif verb_lev==0:
                             print("\n sparsity of  ", v)
 
                         out=out+[v]

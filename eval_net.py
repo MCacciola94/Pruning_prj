@@ -6,7 +6,8 @@ import quik_pruning as qp
 from trainer import Trainer
 import data_loaders as dl
 import aux_tools as at
-import resnet
+import torch.nn.functional as F
+import resnet, resnet_pruned
 import torch.nn.utils.prune as prune
 
 def pruned_par(model):
@@ -15,8 +16,9 @@ def pruned_par(model):
     for m in model.modules():
         #Convolutional layers 
         if isinstance(m,torch.nn.Conv2d):
-            el= float((m.weight_mask[:,:,:,:]==0).sum())
-            tot_pruned+=el
+            if hasattr(m,'weight_mask'):
+                el= float((m.weight_mask[:,:,:,:]==0).sum())
+                tot_pruned+=el  
 
     return tot_pruned
 
@@ -43,32 +45,60 @@ def get_unpruned_filters(m):
     return idx
 
 def compress_block(block):
-    if isinstance(block,resnet.BasicBlock):
+    devie='cpu'
+    if torch.cuda.is_available():
+        device= 'cuda:0'
+    if isinstance(block,resnet.BasicBlock) or isinstance(block,resnet_pruned.BasicBlock):
         c1 = block._modules["conv1"]
         c2 = block._modules["conv2"]
+        b1= block._modules['bn1']
+
         d1 = c1.weight.data
         d2 = c2.weight.data
+
+        db1=b1.weight.data
+        db2=b1.bias.data
+        db3=b1._buffers
+  
         idx = get_unpruned_filters(c1)
+        # idx2 = get_unpruned_filters(c2)
+
         prune.remove(c1,"weight")
         prune.remove(c2,"weight")
-        print(idx)
+        prune.remove(b1,"weight")
+        prune.remove(b1,"bias")
+
+        # print(idx)
         if len(idx) < c1.out_channels:
             if len(idx) == 0:
                 idx = [0]
-                print(c1.in_channels*c1.kernel_size[0]*c1.kernel_size[1]+c2.out_channels*c2.kernel_size[0]*c2.kernel_size[1])
-            idx = torch.Tensor(idx).type(torch.int).cuda()
+                print('All pruned', c1.in_channels*c1.kernel_size[0]*c1.kernel_size[1]+c2.out_channels*c2.kernel_size[0]*c2.kernel_size[1])
+            idx = torch.Tensor(idx).type(torch.int).to(device)
 
             d1 = torch.index_select(d1, dim = 0, index = idx)
             c1.weight = nn.Parameter(d1)
             c1.out_channels = c1.weight.shape[0]
             
            
-
-            #block._modules["bn1"] = nn.BatchNorm2d(c1.out_channels).cuda()
+            db1= torch.index_select(db1, dim = 0, index = idx)
+            db2= torch.index_select(db2, dim = 0, index = idx)
+            db3['running_mean']=torch.index_select(db3['running_mean'], dim = 0, index = idx)
+            db3['running_var']=torch.index_select(db3['running_var'], dim = 0, index = idx)
+            b1.weight = nn.Parameter(db1)
+            b1.bias = nn.Parameter(db2)
+            b1._buffers=db3
+            b1.num_features=b1.weight.shape[0]
 
             d2 = torch.index_select(d2, dim = 1, index = idx)
             c2.weight = nn.Parameter(d2)
             c2.in_channels = c2.weight.shape[1]
+
+            #works untill here
+
+            
+
+
+            return idx
             
 def prune_block_channels(block):
     if isinstance(block,resnet.BasicBlock):
@@ -83,6 +113,49 @@ def prune_block_channels(block):
 
              
             
+def block_test():
+    model=resnet.resnet20(10)
+    model.eval()
+    bb=model.layer1[0]
+    inp=torch.rand([2,16,2,2])
+    out0=bb(inp)
+    
+    print('0pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
+    qp.prune_thr(bb,1.e-12)
+    outhalf=bb(inp)
+    print('1pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
+    bb.conv1.weight_mask[2]=0
+    print('2pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
+    out1=bb(inp)
+    out1_c1=bb.conv1(inp)
+    out1_b1=bb.bn1(out1_c1)
+    print(' is zero? ', ou)
+    out1_rel=F.relu(out1_b1)
+    out1_c2=bb.conv2(out1_rel)
+    out1_b2=bb.bn2(out1_c2)
+    out1_temp= F.relu(bb.shortcut(inp)+out1_b2)
+    print('Diff sanity: ', torch.max(torch.abs(out1_temp-out1)).item())
+
+    idx=compress_block(bb)
+    #breakpoint()
+
+    out2=bb(inp)
+    out2_c1=bb.conv1(inp)
+    out2_b1=bb.bn1(out2_c1)
+    out2_rel=F.relu(out2_b1)
+    out2_c2=bb.conv2(out2_rel)
+    out2_b2=bb.bn2(out2_c2)
+    out2_temp= F.relu(bb.shortcut(inp)+out2_b2)
+    print('Diff sanity: ', torch.max(torch.abs(out2_temp-out2)).item())
+    print('2pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
+    print('Diff: ', torch.max(torch.abs(out1-out2)).item(),' with start ', torch.max(torch.abs(out1-out0)).item(),' with half ', torch.max(torch.abs(outhalf-out0)).item())
+    print('Diff c1: ', torch.max(torch.abs(torch.index_select(out1_c1, dim = 1, index = idx)-out2_c1)).item())
+    print('Diff b1: ', torch.max(torch.abs(torch.index_select(out1_b1, dim = 1, index = idx)-out2_b1)).item())
+    print('Diff rel: ', torch.max(torch.abs(torch.index_select(out1_rel, dim = 1, index = idx)-out2_rel)).item())
+    print('Diff c2: ', torch.max(torch.abs(out1_c2-out2_c2)).item())#torch.index_select(out1_c2, dim = 1, index = idx)
+    print('Diff b2: ', torch.max(torch.abs(out1_b2-out2_b2)).item())#torch.index_select(out1_b2, dim = 1, index = idx)
+
+
 
 def go():
 
@@ -91,16 +164,24 @@ def go():
                         help="Name of checkpoint")
 
     args = parser.parse_args()
-    model = archs.load_arch("resnet20", 10)
+    model = archs.load_arch("resnet20", 10).cuda()
+    model_pruned=torch.nn.DataParallel(resnet_pruned.__dict__['resnet20'](10))
     qp.prune_thr(model,1.e-12)
-    base_checkpoint=torch.load("saves/save_" + args.name +"/checkpoint.th")
+    qp.prune_thr(model_pruned,1.e-12)
+    # base_checkpoint=torch.load("saves/save_" + args.name +"/checkpoint.th")
+    base_checkpoint=torch.load("/local1/caccmatt/Pruning_prj/saves/save_V0.0.2-_resnet20_Cifar10_lr0.1_l1.8_a0.001_e300+200_bs128_t0.0001_m0.9_wd0.0005_mlstemp3_Mscl1.0/checkpoint.th")
+
     model.load_state_dict(base_checkpoint['state_dict'])
+    model_pruned.load_state_dict(base_checkpoint['state_dict'])
     dataset = dl.load_dataset("Cifar10", 128)
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
 
 
     optimizer = torch.optim.SGD(model.parameters(), 0.1,
+                                momentum=0.9,
+                                weight_decay=5.e-4)
+    optimizer_pruned = torch.optim.SGD(model_pruned.parameters(), 0.1,
                                 momentum=0.9,
                                 weight_decay=5.e-4)
 
@@ -110,25 +191,41 @@ def go():
 
     trainer = Trainer(model = model, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, 
                                             criterion =criterion, optimizer = optimizer, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
+    trainer_pruned = Trainer(model = model_pruned, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, 
+                                            criterion =criterion, optimizer = optimizer_pruned, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
 
     trainer.validate(reg_on = False)
-    _, a = at.sparsityRate(model)
-    b = pruned_par(model)
-    tot = par_count(model)
+    trainer_pruned.validate(reg_on = False)
+    _, sp_rate0 = at.sparsityRate(model)
+    pr_par0 = pruned_par(model)
+    tot0 = par_count(model)
+
+    _, sp_rate0_pr = at.sparsityRate(model_pruned)
+    pr_par0_pr = pruned_par(model_pruned)
+    tot0_pr = par_count(model_pruned)
 
     for m in model.modules():
-        prune_block_channels(m)
+        compress_block(m)
+        # prune_block_channels(m)
+    for m in model_pruned.modules():
+        compress_block(m)
 
     #print(model)
     #new_tot = par_count(model)
     trainer.validate(reg_on = False)
+    trainer_pruned.validate(reg_on = False)
 
-    _, a_new = at.sparsityRate(model)
-    b_new = pruned_par(model)
-    print("tot ",tot)
+    _, sp_rate1 = at.sparsityRate(model)
+    pr_par1 = pruned_par(model)
+    tot1 = par_count(model)
+
+    _, sp_rate1_pr = at.sparsityRate(model_pruned)
+    pr_par1_pr = pruned_par(model_pruned)
+    tot1_pr = par_count(model_pruned)
+    print("tot berfore and after ",tot0, ' ', tot1, ' pr ', tot0_pr,' ', tot1_pr)
     #print("new_tot ", new_tot)
-    print(a)
-    print(a_new)
-    print(b)
-    print(b_new)
-    print((b_new-b)/tot)
+    print("sparsity before and after ", sp_rate0, ' ', sp_rate1, ' pr ', sp_rate0_pr,' ', sp_rate1_pr )
+    print("pruned par before and after ", pr_par0, ' ', pr_par1, ' pr ', pr_par0_pr,' ', pr_par1_pr )
+
+    # print((b_new-b)/tot)
+    return model
