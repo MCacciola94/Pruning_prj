@@ -45,13 +45,14 @@ def get_unpruned_filters(m):
     return idx
 
 def compress_block(block):
-    devie='cpu'
+    device='cpu'
     if torch.cuda.is_available():
         device= 'cuda:0'
     if isinstance(block,resnet.BasicBlock) or isinstance(block,resnet_pruned.BasicBlock):
         c1 = block._modules["conv1"]
         c2 = block._modules["conv2"]
         b1= block._modules['bn1']
+        b2= block._modules['bn2']
 
         d1 = c1.weight.data
         d2 = c2.weight.data
@@ -59,22 +60,36 @@ def compress_block(block):
         db1=b1.weight.data
         db2=b1.bias.data
         db3=b1._buffers
+
+        ddb1=b2.weight.data
+        ddb2=b2.bias.data
+        ddb3=b2._buffers
   
         idx = get_unpruned_filters(c1)
-        # idx2 = get_unpruned_filters(c2)
+       
+        idx2 = get_unpruned_filters(c2)
+        
 
-        prune.remove(c1,"weight")
-        prune.remove(c2,"weight")
-        prune.remove(b1,"weight")
-        prune.remove(b1,"bias")
+        if len(idx) < c1.out_channels:
+            prune.remove(c1,"weight")
+            prune.remove(b1,"bias")
+            prune.remove(b1,"weight")
+
+        if len(idx) < c1.out_channels or ( isinstance(block,resnet_pruned.BasicBlock)  and len(idx2) < c2.out_channels):
+            prune.remove(c2,"weight")
+        
+        
+        if isinstance(block,resnet_pruned.BasicBlock) and len(idx2) < c2.out_channels:
+            prune.remove(b2,"weight")
+            prune.remove(b2,"bias")
 
         # print(idx)
         if len(idx) < c1.out_channels:
             if len(idx) == 0:
                 idx = [0]
-                print('All pruned', c1.in_channels*c1.kernel_size[0]*c1.kernel_size[1]+c2.out_channels*c2.kernel_size[0]*c2.kernel_size[1])
+                # print('All pruned', c1.in_channels*c1.kernel_size[0]*c1.kernel_size[1]+c2.out_channels*c2.kernel_size[0]*c2.kernel_size[1])
+            
             idx = torch.Tensor(idx).type(torch.int).to(device)
-
             d1 = torch.index_select(d1, dim = 0, index = idx)
             c1.weight = nn.Parameter(d1)
             c1.out_channels = c1.weight.shape[0]
@@ -88,18 +103,37 @@ def compress_block(block):
             b1.bias = nn.Parameter(db2)
             b1._buffers=db3
             b1.num_features=b1.weight.shape[0]
-
+            #works untill here
             d2 = torch.index_select(d2, dim = 1, index = idx)
+            if isinstance(block,resnet_pruned.BasicBlock) and len(idx2) < c2.out_channels:
+                if len(idx2) == 0:
+                    idx2 = [0]
+                    # print('All pruned')
+                # breakpoint()
+                idx2 = torch.Tensor(idx2).type(torch.int).to(device)
+                d2 = torch.index_select(d2, dim = 0, index = idx2)
+                pruned_idx=[i  for i in range(c2.out_channels) if i not in idx2]
+                block.pruned_filters_conv2=pruned_idx
+                block.bn2_biases={i:ddb2[i] for i in pruned_idx}
+
+                ddb1= torch.index_select(ddb1, dim = 0, index = idx2)
+                ddb2= torch.index_select(ddb2, dim = 0, index = idx2)
+                ddb3['running_mean']=torch.index_select(ddb3['running_mean'], dim = 0, index = idx2)
+                ddb3['running_var']=torch.index_select(ddb3['running_var'], dim = 0, index = idx2)
+                b2.weight = nn.Parameter(ddb1)
+                b2.bias = nn.Parameter(ddb2)
+                b2._buffers=ddb3
+                b2.num_features=b2.weight.shape[0]
+
             c2.weight = nn.Parameter(d2)
             c2.in_channels = c2.weight.shape[1]
-
-            #works untill here
-
+            c2.out_channels = c2.weight.shape[0]
             
-
 
             return idx
-            
+
+
+
 def prune_block_channels(block):
     if isinstance(block,resnet.BasicBlock):
         c1 = block._modules["conv1"]
@@ -114,10 +148,14 @@ def prune_block_channels(block):
              
             
 def block_test():
-    model=resnet.resnet20(10)
+    device='cpu'
+    if torch.cuda.is_available():
+        device= 'cuda:0'
+
+    model=resnet.resnet20(10).to(device)
     model.eval()
     bb=model.layer1[0]
-    inp=torch.rand([2,16,2,2])
+    inp=torch.rand([2,16,2,2]).to(device)
     out0=bb(inp)
     
     print('0pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
@@ -129,7 +167,7 @@ def block_test():
     out1=bb(inp)
     out1_c1=bb.conv1(inp)
     out1_b1=bb.bn1(out1_c1)
-    print(' is zero? ', ou)
+    # print(' is zero? ', ou)
     out1_rel=F.relu(out1_b1)
     out1_c2=bb.conv2(out1_rel)
     out1_b2=bb.bn2(out1_c2)
@@ -154,6 +192,55 @@ def block_test():
     print('Diff rel: ', torch.max(torch.abs(torch.index_select(out1_rel, dim = 1, index = idx)-out2_rel)).item())
     print('Diff c2: ', torch.max(torch.abs(out1_c2-out2_c2)).item())#torch.index_select(out1_c2, dim = 1, index = idx)
     print('Diff b2: ', torch.max(torch.abs(out1_b2-out2_b2)).item())#torch.index_select(out1_b2, dim = 1, index = idx)
+
+
+def block_test_pruned():
+    device='cpu'
+    if torch.cuda.is_available():
+        device= 'cuda:0'
+    
+    model=resnet_pruned.resnet20(10).to(device)
+    model.eval()
+    bb=model.layer1[0]
+    inp=torch.rand([2,16,2,2]).to(device)
+    out0=bb(inp)
+    
+    print('0pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
+    qp.prune_thr(bb,1.e-12)
+    outhalf=bb(inp)
+    print('1pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
+    bb.conv1.weight_mask[2]=0
+    bb.conv2.weight_mask[:]=0
+    print('2pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
+    out1=bb(inp)
+    # out1_c1=bb.conv1(inp)
+    # out1_b1=bb.bn1(out1_c1)
+    # # print(' is zero? ', ou)
+    # out1_rel=F.relu(out1_b1)
+    # out1_c2=bb.conv2(out1_rel)
+    # out1_b2=bb.bn2(out1_c2)
+    # out1_temp= F.relu(bb.shortcut(inp)+out1_b2)
+    # print('Diff sanity: ', torch.max(torch.abs(out1_temp-out1)).item())
+
+    idx=compress_block(bb)
+    #breakpoint()
+
+    out2=bb(inp)
+    # out2_c1=bb.conv1(inp)
+    # out2_b1=bb.bn1(out2_c1)
+    # out2_rel=F.relu(out2_b1)
+    # out2_c2=bb.conv2(out2_rel)
+    # out2_b2=bb.bn2(out2_c2)
+    # out2_temp= F.relu(bb.shortcut(inp)+out2_b2)
+    # print('Diff sanity: ', torch.max(torch.abs(out2_temp-out2)).item())
+    print('2pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
+    print('Diff: ', torch.max(torch.abs(out1-out2)).item(),' with start ', torch.max(torch.abs(out1-out0)).item(),' with half ', torch.max(torch.abs(outhalf-out0)).item())
+    # print('Diff c1: ', torch.max(torch.abs(torch.index_select(out1_c1, dim = 1, index = idx)-out2_c1)).item())
+    # print('Diff b1: ', torch.max(torch.abs(torch.index_select(out1_b1, dim = 1, index = idx)-out2_b1)).item())
+    # print('Diff rel: ', torch.max(torch.abs(torch.index_select(out1_rel, dim = 1, index = idx)-out2_rel)).item())
+    # print('Diff c2: ', torch.max(torch.abs(out1_c2-out2_c2)).item())#torch.index_select(out1_c2, dim = 1, index = idx)
+    # print('Diff b2: ', torch.max(torch.abs(out1_b2-out2_b2)).item())#torch.index_select(out1_b2, dim = 1, index = idx)
+
 
 
 
@@ -210,6 +297,8 @@ def go():
     for m in model_pruned.modules():
         compress_block(m)
 
+    breakpoint()
+
     #print(model)
     #new_tot = par_count(model)
     trainer.validate(reg_on = False)
@@ -228,4 +317,4 @@ def go():
     print("pruned par before and after ", pr_par0, ' ', pr_par1, ' pr ', pr_par0_pr,' ', pr_par1_pr )
 
     # print((b_new-b)/tot)
-    return model
+    return model, model_pruned, dataset

@@ -57,6 +57,7 @@ class BasicBlock(nn.Module):
     def __init__(self, in_planes, planes, stride=1, option='A'):
         super(BasicBlock, self).__init__()
         self.pruned_filters_conv2=[]
+        self.bn2_biases={}
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
@@ -77,29 +78,46 @@ class BasicBlock(nn.Module):
                 )
 
     def forward(self, x):
+        # if self.pruned_filters_conv2!=[]:
+            # breakpoint()
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.bn2(self.conv2(out))
         skip_x = self.shortcut(x)
+        # breakpoint()
 
         if self.pruned_filters_conv2!=[]:
+            # breakpoint()
             not_pruned_comp=[]
-            for i in self.pruned_filters_conv2:
-                not_pruned_com+=skip_x[:i]
-                not_pruned_com+=skip_x[i+1:]
+            ind_old=-1
+            for ind in self.pruned_filters_conv2:
+                # ind_next= self.pruned_filters_conv2[-1] if i<len(self.pruned_filters_conv2)-1 else self.pruned_filters_conv2[i+1]
+                not_pruned_comp+=[skip_x[:,ind_old+1:ind,:,:]]
+                # not_pruned_comp+=[skip_x[:,i+1:ind_next,:,:]]
+                ind_old=ind
+            not_pruned_comp+=[skip_x[:,ind_old+1:,:,:]]
+            # breakpoint()
             skip_x_aux=torch.cat(not_pruned_comp,dim=1)
+            # if out.shape!=skip_x_aux.shape:
+            #     breakpoint()
             out+=skip_x_aux
 
             pruned_comp=[]
-            for i in self.pruned_filters_conv2:
-                pruned_com+=out[:i]
-                pruned_com+=skip_x[i]
-                pruned_com+=out[i:]
+            ind_old=0
+            for i,ind in enumerate(self.pruned_filters_conv2):
+                # ind_next= self.pruned_filters_conv2[-1] if i<len(self.pruned_filters_conv2)-1 else self.pruned_filters_conv2[i+1]
+                pruned_comp+=[out[:,ind_old:ind-i,:,:]]
+                pruned_comp+=[(skip_x[:,ind,:,:]+self.bn2_biases[ind]).unsqueeze(1)]
+                # pruned_com+=[out[:,ind:ind_next,:,:]]
+                ind_old=ind-i
+            pruned_comp+=[out[:,ind_old:,:,:]]
             out=torch.cat(pruned_comp,dim=1)
+            # if out.shape!=skip_x.shape:
+            #     breakpoint()
 
         else: out+=skip_x
 
 
-
+        # print(out.shape)
         out = F.relu(out)
         return out
 
