@@ -166,10 +166,11 @@ class Trainer():
                     'best_prec1': self.best_prec1,
                 }, is_best, filename=os.path.join(self.save_dir, 'checkpoint.th'))
 
-            save_checkpoint({
-                'state_dict': self.model.state_dict(),
-                'best_prec1': self.best_prec1,
-            }, is_best, filename=os.path.join(self.save_dir, 'model.th'))
+            if self.is_best:
+                save_checkpoint({
+                    'state_dict': self.model.state_dict(),
+                    'best_prec1': self.best_prec1,
+                }, is_best, filename=os.path.join(self.save_dir, 'model_best_val.th'))
 
 
         print("\n Elapsed time for training ", datetime.now()-start)
@@ -285,10 +286,11 @@ class Trainer():
 
         # switch to evaluate mode
         self.model.eval()
-
+        # breakpoint()
         end = time.time()
         with torch.no_grad():
             for i, (input, target) in enumerate(self.dataset["valid_loader"]):
+                
 
                 target = target.cuda()
                 input_var = input.cuda()
@@ -390,5 +392,4 @@ def accuracy(output, target, topk=(1,)):
             correct_k = correct[:k].reshape(-1).float().sum(0, keepdim=True)
             res.append(correct_k.mul_(100.0 / batch_size))
         return res
-
 

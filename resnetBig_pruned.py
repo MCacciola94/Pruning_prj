@@ -165,7 +165,7 @@ class Bottleneck(nn.Module):
             ind_old=0
             for i,ind in enumerate(self.pruned_filters_conv3):
                 pruned_comp+=[out[:,ind_old:ind-i,:,:]]
-                pruned_comp+=[(skip_x[:,ind,:,:]+self.bn2_biases[ind]).unsqueeze(1)]
+                pruned_comp+=[(skip_x[:,ind,:,:]+self.bn3_biases[ind]).unsqueeze(1)]
                 ind_old=ind-i
             pruned_comp+=[out[:,ind_old:,:,:]]
             out=torch.cat(pruned_comp,dim=1)

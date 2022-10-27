@@ -7,8 +7,9 @@ from trainer import Trainer
 import data_loaders as dl
 import aux_tools as at
 import torch.nn.functional as F
-import resnet, resnet_pruned
+import resnet, resnet_pruned, resnetBig, resnetBig_pruned
 import torch.nn.utils.prune as prune
+import os
 
 def pruned_par(model):
     
@@ -48,7 +49,7 @@ def compress_block(block):
     device='cpu'
     if torch.cuda.is_available():
         device= 'cuda:0'
-    if isinstance(block,resnet.BasicBlock) or isinstance(block,resnet_pruned.BasicBlock):
+    if isinstance(block,resnet.BasicBlock) or isinstance(block,resnet_pruned.BasicBlock) or isinstance(block,resnetBig_pruned.BasicBlock) or isinstance(block,resnetBig.BasicBlock):
         c1 = block._modules["conv1"]
         c2 = block._modules["conv2"]
         b1= block._modules['bn1']
@@ -75,11 +76,11 @@ def compress_block(block):
             prune.remove(b1,"bias")
             prune.remove(b1,"weight")
 
-        if len(idx) < c1.out_channels or ( isinstance(block,resnet_pruned.BasicBlock)  and len(idx2) < c2.out_channels):
+        if len(idx) < c1.out_channels or ( (isinstance(block,resnet_pruned.BasicBlock)or isinstance(block,resnetBig_pruned.BasicBlock))  and len(idx2) < c2.out_channels):
             prune.remove(c2,"weight")
         
         
-        if isinstance(block,resnet_pruned.BasicBlock) and len(idx2) < c2.out_channels:
+        if (isinstance(block,resnet_pruned.BasicBlock) or isinstance(block,resnetBig_pruned.BasicBlock)) and len(idx2) < c2.out_channels:
             prune.remove(b2,"weight")
             prune.remove(b2,"bias")
 
@@ -105,7 +106,7 @@ def compress_block(block):
             b1.num_features=b1.weight.shape[0]
             #works untill here
             d2 = torch.index_select(d2, dim = 1, index = idx)
-            if isinstance(block,resnet_pruned.BasicBlock) and len(idx2) < c2.out_channels:
+            if (isinstance(block,resnet_pruned.BasicBlock) or isinstance(block,resnetBig_pruned.BasicBlock)) and len(idx2) < c2.out_channels:
                 if len(idx2) == 0:
                     idx2 = [0]
                     # print('All pruned')
@@ -249,9 +250,9 @@ def compress_bottleneck(block):
                 b3._buffers=dddb3
                 b3.num_features=b3.weight.shape[0]
 
-            c3.weight = nn.Parameter(d2)
-            c3.in_channels = c2.weight.shape[1]
-            c3.out_channels = c2.weight.shape[0]
+            c3.weight = nn.Parameter(d3)
+            c3.in_channels = c3.weight.shape[1]
+            c3.out_channels = c3.weight.shape[0]
             
 
             return idx
@@ -367,14 +368,8 @@ def block_test_pruned():
 
 
 
-def go(name):
+def unit_test_res20_C10(name):
     # name='/local1/caccmatt/Pruning_prj/saves/save_V0.0.2-_resnet20_Cifar10_lr0.1_l1.8_a0.001_e300+200_bs128_t0.0001_m0.9_wd0.0005_mlstemp3_Mscl1.0/checkpoint.th'
-
-    parser = argparse.ArgumentParser(description='evaluation of pruned net')
-    parser.add_argument('--name',
-                        help="Name of checkpoint")
-
-    args = parser.parse_args()
     model = archs.load_arch("resnet20", 10).cuda()
     model_pruned=torch.nn.DataParallel(resnet_pruned.__dict__['resnet20'](10))
     qp.prune_thr(model,1.e-12)
@@ -449,10 +444,183 @@ def go(name):
     # print((b_new-b)/tot)
     return model, model_pruned, dataset
 
-def eval_again():
+def eval_again_res20_C10():
     name_list = os.listdir('saves')
     for file_name in name_list:
         if '_resnet20_Cifar10_'in file_name and 'original' not in file_name:
             print(file_name)
-            go('saves/'+file_name+'/checkpoint.th')
+            unit_test_res20_C10('saves/'+file_name+'/checkpoint.th')
+            breakpoint()
+
+
+def unit_test_res18_C10(name):
+    name='/local1/caccmatt/Pruning_prj/saves/save_V0.0.1-_resnet18_Cifar10_lr0.1_l0.8_a0.3_e300+200_bs128_t0.0001_m0.9_wd0.0005_mlstemp3_Mscl1.0/model.th'
+    model = archs.load_arch("resnet18", 10).cuda()
+    model_pruned=resnetBig_pruned.__dict__['resnet18'](10).cuda()
+    qp.prune_thr(model,1.e-12)
+    qp.prune_thr(model_pruned,1.e-12)
+    
+    # base_checkpoint=torch.load("saves/save_" + args.name +"/checkpoint.th")
+    base_checkpoint=torch.load(name)
+
+    model.load_state_dict(base_checkpoint['state_dict'])
+    model_pruned.load_state_dict(base_checkpoint['state_dict'])
+    # breakpoint()
+    model.eval()
+    model_pruned.eval()
+    model_pruned(torch.rand([1,3,32,32]).cuda())
+    dataset = dl.load_dataset("Cifar10", 128)
+    # define loss function (criterion) and optimizer
+    criterion = nn.CrossEntropyLoss().cuda()
+
+
+    optimizer = torch.optim.SGD(model.parameters(), 0.1,
+                                momentum=0.9,
+                                weight_decay=5.e-4)
+    optimizer_pruned = torch.optim.SGD(model_pruned.parameters(), 0.1,
+                                momentum=0.9,
+                                weight_decay=5.e-4)
+
+    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+                                                        milestones=[300], last_epoch= - 1)
+
+
+    trainer = Trainer(model = model, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, 
+                                            criterion =criterion, optimizer = optimizer, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
+    trainer_pruned = Trainer(model = model_pruned, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, 
+                                            criterion =criterion, optimizer = optimizer_pruned, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
+
+    trainer.validate(reg_on = False)
+    # trainer_pruned.validate(reg_on = False)
+    _, sp_rate0 = at.sparsityRate(model)
+    pr_par0 = pruned_par(model)
+    tot0 = par_count(model)
+
+    _, sp_rate0_pr = at.sparsityRate(model_pruned)
+    pr_par0_pr = pruned_par(model_pruned)
+    tot0_pr = par_count(model_pruned)
+
+    for m in model.modules():
+        compress_block(m)
+        # prune_block_channels(m)
+    for m in model_pruned.modules():
+        compress_block(m)
+
+    # breakpoint()
+
+    #print(model)
+    #new_tot = par_count(model)
+    # trainer.validate(reg_on = False)
+    trainer_pruned.validate(reg_on = False)
+
+    _, sp_rate1 = at.sparsityRate(model)
+    pr_par1 = pruned_par(model)
+    tot1 = par_count(model)
+
+    _, sp_rate1_pr = at.sparsityRate(model_pruned)
+    pr_par1_pr = pruned_par(model_pruned)
+    tot1_pr = par_count(model_pruned)
+    print("tot berfore and after ",tot0, ' ', tot1, ' pr ', tot0_pr,' ', tot1_pr)
+    #print("new_tot ", new_tot)
+    print("sparsity before and after ", sp_rate0, ' ', sp_rate1, ' pr ', sp_rate0_pr,' ', sp_rate1_pr )
+    # print("pruned par before and after ", pr_par0, ' ', pr_par1, ' pr ', pr_par0_pr,' ', pr_par1_pr )
+    print('Old stats ', sp_rate0[1],' perc ', 100*sp_rate0[1]/tot0 )
+    print('New stats ', tot0-tot1_pr,' perc ', 100*(tot0-tot1_pr)/tot0 )
+    # print((b_new-b)/tot)
+    return model, model_pruned, dataset
+
+
+def eval_again_res18_C10():
+    name_list = os.listdir('saves')
+    for file_name in name_list:
+        if ('_resnet18_Cifar10_'in file_name) and ('original' not in file_name) and ('300+200'  in file_name):
+            print(file_name)
+            unit_test_res18_C10('saves/'+file_name+'/checkpoint.th')
+            breakpoint()
+
+
+
+def unit_test_res50_C10(name):
+    name='/local1/caccmatt/Pruning_prj/saves/save_V0.0.1-_resnet50_Cifar10_lr0.1_l2.2_a0.6_e300+200_bs128_t0.0001_m0.9_wd0.0005_mlstemp3_Mscl1.0/checkpoint.th'
+    model = archs.load_arch("resnet50", 10).cuda()
+    model_pruned=resnetBig_pruned.__dict__['resnet50'](10).cuda()
+    qp.prune_thr(model,1.e-12)
+    qp.prune_thr(model_pruned,1.e-12)
+    
+    # base_checkpoint=torch.load("saves/save_" + args.name +"/checkpoint.th")
+    base_checkpoint=torch.load(name)
+
+    model.load_state_dict(base_checkpoint['state_dict'])
+    model_pruned.load_state_dict(base_checkpoint['state_dict'])
+    # breakpoint()
+    model.eval()
+    model_pruned.eval()
+    model_pruned(torch.rand([1,3,32,32]).cuda())
+    dataset = dl.load_dataset("Cifar10", 128)
+    # define loss function (criterion) and optimizer
+    criterion = nn.CrossEntropyLoss().cuda()
+
+
+    optimizer = torch.optim.SGD(model.parameters(), 0.1,
+                                momentum=0.9,
+                                weight_decay=5.e-4)
+    optimizer_pruned = torch.optim.SGD(model_pruned.parameters(), 0.1,
+                                momentum=0.9,
+                                weight_decay=5.e-4)
+
+    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+                                                        milestones=[300], last_epoch= - 1)
+
+
+    trainer = Trainer(model = model, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, 
+                                            criterion =criterion, optimizer = optimizer, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
+    trainer_pruned = Trainer(model = model_pruned, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, 
+                                            criterion =criterion, optimizer = optimizer_pruned, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
+
+    trainer.validate(reg_on = False)
+    # trainer_pruned.validate(reg_on = False)
+    _, sp_rate0 = at.sparsityRate(model)
+    pr_par0 = pruned_par(model)
+    tot0 = par_count(model)
+
+    _, sp_rate0_pr = at.sparsityRate(model_pruned)
+    pr_par0_pr = pruned_par(model_pruned)
+    tot0_pr = par_count(model_pruned)
+
+    for m in model.modules():
+        compress_bottleneck(m)
+        # prune_block_channels(m)
+    for m in model_pruned.modules():
+        compress_bottleneck(m)
+
+    # breakpoint()
+
+    #print(model)
+    new_tot = par_count(model)
+    # trainer.validate(reg_on = False)
+    trainer_pruned.validate(reg_on = False)
+
+    _, sp_rate1 = at.sparsityRate(model)
+    pr_par1 = pruned_par(model)
+    tot1 = par_count(model)
+
+    _, sp_rate1_pr = at.sparsityRate(model_pruned)
+    pr_par1_pr = pruned_par(model_pruned)
+    tot1_pr = par_count(model_pruned)
+    print("tot berfore and after ",tot0, ' ', tot1, ' pr ', tot0_pr,' ', tot1_pr)
+    print("new_tot ", new_tot)
+    print("sparsity before and after ", sp_rate0, ' ', sp_rate1, ' pr ', sp_rate0_pr,' ', sp_rate1_pr )
+    print("pruned par before and after ", pr_par0, ' ', pr_par1, ' pr ', pr_par0_pr,' ', pr_par1_pr )
+    print('Old stats ', sp_rate0[1],' perc ', 100*sp_rate0[1]/tot0 )
+    print('New stats ', tot0-tot1_pr,' perc ', 100*(tot0-tot1_pr)/tot0 )
+    # print((b_new-b)/tot)
+    return model, model_pruned, dataset
+
+
+def eval_again_res50_C10():
+    name_list = os.listdir('saves')
+    for file_name in name_list:
+        if ('_resnet18_Cifar10_'in file_name) and ('original' not in file_name) and ('300+200'  in file_name):
+            print(file_name)
+            unit_test_res18_C10('saves/'+file_name+'/checkpoint.th')
             breakpoint()
