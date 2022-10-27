@@ -132,6 +132,129 @@ def compress_block(block):
 
             return idx
 
+def compress_bottleneck(block):
+    device='cpu'
+    if torch.cuda.is_available():
+        device= 'cuda:0'
+    if isinstance(block,resnetBig.Bottleneck) or isinstance(block,resnetBig_pruned.Bottleneck):
+        c1 = block._modules["conv1"]
+        c2 = block._modules["conv2"]
+        c3 = block._modules["conv3"]
+        b1= block._modules['bn1']
+        b2= block._modules['bn2']
+        b3= block._modules['bn3']
+
+        d1 = c1.weight.data
+        d2 = c2.weight.data
+        d3 = c3.weight.data
+
+        db1=b1.weight.data
+        db2=b1.bias.data
+        db3=b1._buffers
+
+        ddb1=b2.weight.data
+        ddb2=b2.bias.data
+        ddb3=b2._buffers
+
+        dddb1=b3.weight.data
+        dddb2=b3.bias.data
+        dddb3=b3._buffers
+  
+        idx = get_unpruned_filters(c1)
+       
+        idx2 = get_unpruned_filters(c2)
+
+        idx3 = get_unpruned_filters(c3)
+        
+
+        if len(idx) < c1.out_channels:
+            prune.remove(c1,"weight")
+            prune.remove(b1,"bias")
+            prune.remove(b1,"weight")
+
+        if len(idx) < c1.out_channels or and len(idx2) < c2.out_channels:
+            prune.remove(c2,"weight")
+            prune.remove(b2,"weight")
+            prune.remove(b2,"bias")
+
+        if len(idx2) < c2.out_channels or ( isinstance(block,resnetBig_pruned.Bottleneck)  and len(idx3) < c3.out_channels):
+            prune.remove(c3,"weight")
+        
+        if isinstance(block,resnetBig_pruned.Bottleneck)  and len(idx3) < c3.out_channels:
+            prune.remove(b3,"weight")
+            prune.remove(b3,"bias")
+
+        # print(idx)
+        if len(idx) < c1.out_channels:
+            if len(idx) == 0:
+                idx = [0]
+                # print('All pruned', c1.in_channels*c1.kernel_size[0]*c1.kernel_size[1]+c2.out_channels*c2.kernel_size[0]*c2.kernel_size[1])
+            
+            idx = torch.Tensor(idx).type(torch.int).to(device)
+            d1 = torch.index_select(d1, dim = 0, index = idx)
+            c1.weight = nn.Parameter(d1)
+            c1.out_channels = c1.weight.shape[0]
+            
+           
+            db1= torch.index_select(db1, dim = 0, index = idx)
+            db2= torch.index_select(db2, dim = 0, index = idx)
+            db3['running_mean']=torch.index_select(db3['running_mean'], dim = 0, index = idx)
+            db3['running_var']=torch.index_select(db3['running_var'], dim = 0, index = idx)
+            b1.weight = nn.Parameter(db1)
+            b1.bias = nn.Parameter(db2)
+            b1._buffers=db3
+            b1.num_features=b1.weight.shape[0]
+
+
+            d2 = torch.index_select(d2, dim = 1, index = idx)
+            if len(idx2) == 0:
+                idx2 = [0]
+                # print('All pruned')
+            # breakpoint()
+            idx2 = torch.Tensor(idx2).type(torch.int).to(device)
+            d2 = torch.index_select(d2, dim = 0, index = idx2)
+            c2.weight = nn.Parameter(d2)
+            c2.in_channels = c2.weight.shape[1]
+            c2.out_channels = c2.weight.shape[0]
+
+            ddb1= torch.index_select(ddb1, dim = 0, index = idx2)
+            ddb2= torch.index_select(ddb2, dim = 0, index = idx2)
+            ddb3['running_mean']=torch.index_select(ddb3['running_mean'], dim = 0, index = idx2)
+            ddb3['running_var']=torch.index_select(ddb3['running_var'], dim = 0, index = idx2)
+            b2.weight = nn.Parameter(ddb1)
+            b2.bias = nn.Parameter(ddb2)
+            b2._buffers=ddb3
+            b2.num_features=b2.weight.shape[0]
+
+            
+
+            d3 = torch.index_select(d3, dim = 1, index = idx2)
+            if isinstance(block,resnetBig_pruned.Bottleneck) and len(idx3) < c3.out_channels:
+                if len(idx3) == 0:
+                    idx3 = [0]
+                    # print('All pruned')
+                # breakpoint()
+                idx3 = torch.Tensor(idx3).type(torch.int).to(device)
+                d3 = torch.index_select(d3, dim = 0, index = idx3)
+                pruned_idx=[i  for i in range(c3.out_channels) if i not in idx3]
+                block.pruned_filters_conv3=pruned_idx
+                block.bn3_biases={i:dddb2[i] for i in pruned_idx}
+
+                dddb1= torch.index_select(dddb1, dim = 0, index = idx3)
+                dddb2= torch.index_select(dddb2, dim = 0, index = idx3)
+                dddb3['running_mean']=torch.index_select(dddb3['running_mean'], dim = 0, index = idx3)
+                dddb3['running_var']=torch.index_select(dddb3['running_var'], dim = 0, index = idx3)
+                b3.weight = nn.Parameter(dddb1)
+                b3.bias = nn.Parameter(dddb2)
+                b3._buffers=dddb3
+                b3.num_features=b3.weight.shape[0]
+
+            c3.weight = nn.Parameter(d2)
+            c3.in_channels = c2.weight.shape[1]
+            c3.out_channels = c2.weight.shape[0]
+            
+
+            return idx
 
 
 def prune_block_channels(block):
@@ -244,7 +367,8 @@ def block_test_pruned():
 
 
 
-def go():
+def go(name):
+    # name='/local1/caccmatt/Pruning_prj/saves/save_V0.0.2-_resnet20_Cifar10_lr0.1_l1.8_a0.001_e300+200_bs128_t0.0001_m0.9_wd0.0005_mlstemp3_Mscl1.0/checkpoint.th'
 
     parser = argparse.ArgumentParser(description='evaluation of pruned net')
     parser.add_argument('--name',
@@ -255,11 +379,16 @@ def go():
     model_pruned=torch.nn.DataParallel(resnet_pruned.__dict__['resnet20'](10))
     qp.prune_thr(model,1.e-12)
     qp.prune_thr(model_pruned,1.e-12)
+    
     # base_checkpoint=torch.load("saves/save_" + args.name +"/checkpoint.th")
-    base_checkpoint=torch.load("/local1/caccmatt/Pruning_prj/saves/save_V0.0.2-_resnet20_Cifar10_lr0.1_l1.8_a0.001_e300+200_bs128_t0.0001_m0.9_wd0.0005_mlstemp3_Mscl1.0/checkpoint.th")
+    base_checkpoint=torch.load(name)
 
     model.load_state_dict(base_checkpoint['state_dict'])
     model_pruned.load_state_dict(base_checkpoint['state_dict'])
+    # breakpoint()
+    model.eval()
+    model_pruned.eval()
+    model_pruned(torch.rand([1,3,32,32]))
     dataset = dl.load_dataset("Cifar10", 128)
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
@@ -282,7 +411,7 @@ def go():
                                             criterion =criterion, optimizer = optimizer_pruned, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
 
     trainer.validate(reg_on = False)
-    trainer_pruned.validate(reg_on = False)
+    # trainer_pruned.validate(reg_on = False)
     _, sp_rate0 = at.sparsityRate(model)
     pr_par0 = pruned_par(model)
     tot0 = par_count(model)
@@ -297,11 +426,11 @@ def go():
     for m in model_pruned.modules():
         compress_block(m)
 
-    breakpoint()
+    # breakpoint()
 
     #print(model)
     #new_tot = par_count(model)
-    trainer.validate(reg_on = False)
+    # trainer.validate(reg_on = False)
     trainer_pruned.validate(reg_on = False)
 
     _, sp_rate1 = at.sparsityRate(model)
@@ -311,10 +440,19 @@ def go():
     _, sp_rate1_pr = at.sparsityRate(model_pruned)
     pr_par1_pr = pruned_par(model_pruned)
     tot1_pr = par_count(model_pruned)
-    print("tot berfore and after ",tot0, ' ', tot1, ' pr ', tot0_pr,' ', tot1_pr)
+    # print("tot berfore and after ",tot0, ' ', tot1, ' pr ', tot0_pr,' ', tot1_pr)
     #print("new_tot ", new_tot)
-    print("sparsity before and after ", sp_rate0, ' ', sp_rate1, ' pr ', sp_rate0_pr,' ', sp_rate1_pr )
-    print("pruned par before and after ", pr_par0, ' ', pr_par1, ' pr ', pr_par0_pr,' ', pr_par1_pr )
-
+    # print("sparsity before and after ", sp_rate0, ' ', sp_rate1, ' pr ', sp_rate0_pr,' ', sp_rate1_pr )
+    # print("pruned par before and after ", pr_par0, ' ', pr_par1, ' pr ', pr_par0_pr,' ', pr_par1_pr )
+    print('Old stats ', sp_rate0[1],' perc ', 100*sp_rate0[1]/tot0 )
+    print('New stats ', tot0-tot1_pr,' perc ', 100*(tot0-tot1_pr)/tot0 )
     # print((b_new-b)/tot)
     return model, model_pruned, dataset
+
+def eval_again():
+    name_list = os.listdir('saves')
+    for file_name in name_list:
+        if '_resnet20_Cifar10_'in file_name and 'original' not in file_name:
+            print(file_name)
+            go('saves/'+file_name+'/checkpoint.th')
+            breakpoint()
