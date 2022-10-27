@@ -172,7 +172,7 @@ def compress_bottleneck(block):
             prune.remove(b1,"bias")
             prune.remove(b1,"weight")
 
-        if len(idx) < c1.out_channels or and len(idx2) < c2.out_channels:
+        if len(idx) < c1.out_channels or len(idx2) < c2.out_channels:
             prune.remove(c2,"weight")
             prune.remove(b2,"weight")
             prune.remove(b2,"bias")
