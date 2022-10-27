@@ -39,17 +39,22 @@ def par_count_old(model):
 def par_count(model,conv=True,bias_conv=True, linear=True, bias_linear=True, batchnorm=True, bias_batchnorm=True all_modules=True):
     res = 0
     for m in model.modules():
+        
         if isinstance(m,nn.Conv2d) and (conv or all_modules):
-            res+=par_count_module(m)
-        if isinstance(m,nn.Linear):
-            dims = m.weight.shape
-            res += dims[0]*dims[1]
+            res+=par_count_module(m, bias=(bias_conv or all_modules))
+
+        if isinstance(m,nn.Linear) and (linear or all_modules):
+            res+=par_count_module(m, bias=(bias_linear or all_modules))
+
+        if isinstance(m,nn.BatchNorm2d) and (batchnorm or all_modules):
+            res+=par_count_module(m, bias=(bias_batchnorm or all_modules))
+
     return res
 
-def par_count_module(module):
+def par_count_module(module, bias):
     res=0
-    for p in module.parameters():
-        if p.requires_grad:
+    for name, par in module.named_parameters():
+        if par.requires_grad and (bias or name!='bias'):
             res+= p.numel()
     return res
 

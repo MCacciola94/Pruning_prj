@@ -1,63 +1,59 @@
 import torch
 import numpy as np
 
-################################################################################
-##################################### OPTIONS ##################################
-################################################################################
-options= {}
-
-class PerspReg: 
-   def __init__(self,alpha,M, option= 'single_convs'):
+class myTools: 
+   def __init__(self,alpha,M):
        self.alpha=alpha
        self.M=M
-       self.const=(torch.sqrt(torch.Tensor([alpha/(1-alpha)]))).cuda()
-       self.option=option
     #Computation of the current factor
-   def __call__(self,net, lamb = 0.1):
-        if self.option=='single_convs':
-            reg= self.single_convs(net)
-        return lamb* reg
-
-    def compatible_group_computation(self,group):
+   def myReg(self,net, loss, lamb = 0.1):
         reg = 0 
         alpha=self.alpha
-        const=self.const
-        M=self.M[group]
-        norminf=torch.norm(group,dim=1,p=np.inf)
-        norm2= torch.norm(group,dim=1,p=2)
-        num_el_struct=group.size(0)
-       
-
-
-        bo1 = torch.max(norminf/M,const*norm2)>=1
-        reg1 = norm2**2+1-alpha
-
-        bo2 = norminf/M<=const*norm2
-        reg2=const*norm2*(1+alpha)
-
-        eps=(torch.zeros(norminf.size())).cuda()
-        eps=eps+1e-10
-        reg3=norm2**2/(torch.max(eps,norminf))*M+(1-alpha)*norminf/M
-
-        bo2=torch.logical_and(bo2, torch.logical_not(bo1))
-        bo3=torch.logical_and(torch.logical_not(bo2), torch.logical_not(bo1))
-
-        reg+=(bo1*reg1+bo2*reg2+bo3*reg3).sum()*num_el
-                        
-        return reg
-    
-    def single_convs(model):
-        reg = 0    
+        const=(torch.sqrt(torch.Tensor([alpha/(1-alpha)]))).cuda()
         tot=0
         for m in net.modules():
-            if isinstance(m,torch.nn.Conv2d):
-                group = m.weight.permute([1,0,2,3])
-                reg+=self.compatible_group_computation(group)
-                tot+=group.numel()
 
-        return reg/tot
+            #Fully Connected layers
+            if isinstance(m,torch.nn.Linear):
+                continue
+                M=self.M[m]
+                norminf=torch.norm(m.weight,dim=1,p=np.inf)
+                norm2= torch.norm(m.weight,dim=1,p=2)
+                num_el=m.in_features
+                tot+=m.in_features*m.out_features
+                
+            else:              
+            #Convolutional layers               
+                if isinstance(m,torch.nn.Conv2d):
+                    M=self.M[m]
+                    norminf=torch.norm(m.weight,dim=(1,2,3),p=np.inf)
+                    norm2= torch.norm(m.weight,dim=(1,2,3),p=2)
+                    num_el=m.kernel_size[0]*m.kernel_size[1]*m.in_channels
+                    tot+=m.kernel_size[0]*m.kernel_size[1]*m.in_channels*m.out_channels
+                else:
+                    continue
 
 
+            bo1 = torch.max(norminf/M,const*norm2)>=1
+            reg1 = norm2**2+1-alpha
+
+            bo2 = norminf/M<=const*norm2
+            reg2=const*norm2*(1+alpha)
+
+            eps=(torch.zeros(norminf.size())).cuda()
+            eps=eps+1e-10
+            reg3=norm2**2/(torch.max(eps,norminf))*M+(1-alpha)*norminf/M
+
+            bo2=torch.logical_and(bo2, torch.logical_not(bo1))
+            bo3=torch.logical_and(torch.logical_not(bo2), torch.logical_not(bo1))
+
+            reg+=(bo1*reg1+bo2*reg2+bo3*reg3).sum()*num_el
+                        
+        loss = loss +lamb* reg/tot
+        reg=(lamb* reg/tot).item()
+        return loss, reg
+    
+    
     
   
     

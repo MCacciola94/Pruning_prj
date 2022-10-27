@@ -137,6 +137,22 @@ def layerwise_M(model, const = False, scale = 1.0):
 
        return Mdict
 
+def paramwise_M(model, const = False, scale = 1.0):
+       Mdict={}
+       model.eval()
+       with torch.no_grad:
+        if const:
+            for par in model.parameters():
+                    if par.requires_grad:
+                        Mdict[par]=scale
+        else:
+                for par in model.parameters():
+                    if par.requires_grad:
+                        Mdict[par]=torch.norm(par.data,p=np.inf).item() * scale
+
+        return Mdict
+
+
 def noReg(net, loss, lamb=0.1):
     return loss,0
 
