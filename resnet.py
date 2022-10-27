@@ -116,6 +116,20 @@ class ResNet(nn.Module):
         out = self.linear(out)
         return out
 
+    def conv_batchnorm_blocks(self):
+        blocks_list=[]
+        blocks_list.append( {'conv':self.conv1,'batchnorm':self.bn1, 'id':0})
+        i=1
+        for b in self.modules():
+            if isinstance(b, BasicBlock):
+                blocks_list.append( {'conv':b.conv1,'batchnorm':b.bn1, 'id':i})
+                blocks_list.append( {'conv':b.conv2,'batchnorm':b.bn2, 'id':i+1})
+                i+=2
+                if isinstance(b.shortcut,nn.Sequential) and len(b.shortcut)>0 :
+                    blocks_list.append( {'conv':b.shortcut[0],'batchnorm':b.shortcut[1], 'id':i})
+                    i+=1
+        yield from blocks_list
+
 
 def resnet20(num_classes):
     return ResNet(BasicBlock, [3, 3, 3], num_classes = num_classes)

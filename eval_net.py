@@ -36,7 +36,7 @@ def par_count_old(model):
             res += dims[0]*dims[1]
     return res
 
-def par_count(model,conv=True,bias_conv=True, linear=True, bias_linear=True, batchnorm=True, bias_batchnorm=True all_modules=True):
+def par_count(model,conv=True,bias_conv=True, linear=True, bias_linear=True, batchnorm=True, bias_batchnorm=True, all_modules=True):
     res = 0
     for m in model.modules():
         
@@ -55,7 +55,7 @@ def par_count_module(module, bias):
     res=0
     for name, par in module.named_parameters():
         if par.requires_grad and (bias or name!='bias'):
-            res+= p.numel()
+            res+= par.numel()
     return res
 
 def get_unpruned_filters(m):

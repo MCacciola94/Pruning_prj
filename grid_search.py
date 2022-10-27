@@ -64,6 +64,7 @@ class Grid_Search():
         save_every = conf1.getint("save_every", str((epochs+finetuning_epochs)*0.2))
         print_freq = conf1.getint("print_freq", "100")
         M_scale = conf1.getfloat("M_scale", 1.0)
+        structs = conf1.get("structs", 'single_convs')
         base_name = conf1.get("base_name")
         ##############################################################
 
@@ -77,7 +78,7 @@ class Grid_Search():
 
                     name = (base_name + "_" + arch + "_" + dset + "_lr" + str(lr) + "_l" + str(lamb) + "_a" + 
                             str(alpha) + "_e" + str(epochs) + "+" + str(finetuning_epochs) + "_bs" + str(batch_size) +
-                            "_t" + str(threshold) + "_m" + str(momentum) + "_wd" + str(weight_decay) + "_mlst" + milestones + "_Mscl" + str(M_scale))
+                            "_t" + str(threshold) + "_m" + str(momentum) + "_wd" + str(weight_decay) + "_mlst" + milestones + "_Mscl" + str(M_scale)+ "_struct" + structs)
 
                     save_dir = "saves/save_" + name
                     log_file = open("temp_logs/" + name, "w")
@@ -112,13 +113,17 @@ class Grid_Search():
                         torch.save(model.state_dict(),name + "rand_init.ph")
                         base_checkpoint=torch.load("saves/save_" + arch + "_" + dset + "_first_original/checkpoint.th")
                         model.load_state_dict(base_checkpoint['state_dict'])
-                        M=at.layerwise_M(model, scale = M_scale) #a dictionary withe hte value of M for each layer of the model
+                        if structs == 'single_convs':
+                            M=at.layerwise_M(model, scale = M_scale) #a dictionary withe hte value of M for each layer of the model
+                        elif structs == 'convs_and_batchnorm':
+                             M=at.blockwise_M(model, scale = M_scale) 
+
                         model.load_state_dict(torch.load(name  + "rand_init.ph"))
                         os.remove(name + "rand_init.ph")
 
                         print("M values:\n",M)
                         
-                        reg = (pReg.myTools(alpha=alpha,M=M)).myReg 
+                        reg = pReg.PerspReg(alpha=alpha,M=M, option =structs)
 
 
 

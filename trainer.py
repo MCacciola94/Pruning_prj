@@ -219,7 +219,9 @@ class Trainer():
             loss = self.criterion(output, target_var)
             loss_noreg = loss.item()
             if reg_on:
-                loss, regTerm = self.reg(self.model, loss, self.lamb)
+                regTerm_gd=self.reg(self.model, self.lamb)
+                regTerm = regTerm_gd.item()
+                loss+=regTerm_gd
             else: regTerm = 0.0
 
             # compute gradient and do SGD step
@@ -302,7 +304,9 @@ class Trainer():
                 loss_noreg = loss.item()
 
                 if reg_on:
-                    loss, regTerm = self.reg(self.model, loss, self.lamb)
+                    regTerm_gd=self.reg(self.model, self.lamb)
+                    regTerm = regTerm_gd.item()
+                    loss+=regTerm_gd
                 else: regTerm = 0.0
 
                 output = output.float()

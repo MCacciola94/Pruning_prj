@@ -152,6 +152,23 @@ def paramwise_M(model, const = False, scale = 1.0):
 
         return Mdict
 
+#mode is supposed to  have a method to retrive conv-batchnorm blocks
+def blockwise_M(net, const = False, scale = 1.0):
+    if isinstance(net,torch.nn.DataParallel):
+        net=net.module
+    Mdict={}
+    net.eval()
+    with torch.no_grad():
+        if const:
+            for block in net.conv_batchnorm_blocks():
+                    Mdict[block['id']]=scale
+        else:
+            for block in net.conv_batchnorm_blocks():
+                Mdict[block['id']]= scale*max(torch.norm(block['conv'].weight.data,p=np.inf).item() ,
+                                                torch.norm(block['batchnorm'].weight.data,p=np.inf).item(),
+                                                torch.norm(block['batchnorm'].bias.data,p=np.inf).item())
+
+        return Mdict
 
 def noReg(net, loss, lamb=0.1):
     return loss,0
