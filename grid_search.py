@@ -16,6 +16,9 @@ import perspReg as pReg
 import architectures as archs
 import data_loaders as dl
 from trainer import Trainer
+import resnet_pruned
+import eval_net as en
+import quik_pruning as qp
 
 
 ##########################################################################################
@@ -132,6 +135,22 @@ class Grid_Search():
                     else:
                         trainer.train(epochs, finetuning_epochs)
 
+                    #creating the actual pruned model
+
+                    model_pruned=torch.nn.DataParallel(resnet_pruned.__dict__[arch](10))
+                    qp.prune_thr(model_pruned,1.e-12)
+                    base_checkpoint=torch.load(save_dir+'/model_best_val.th')
+                    model_pruned.load_state_dict(base_checkpoint['state_dict'])
+                    model.eval()
+                    model_pruned(torch.rand([1,3,32,32]))
+                    for m in model_pruned.modules():
+                        en.compress_block(m)
+
+                    trainer_pr = Trainer(model = model_pruned, dataset = dataset, reg = reg, lamb = lamb, threshold = threshold, 
+                                        criterion =criterion, optimizer = None, lr_scheduler = lr_scheduler, save_dir = save_dir, save_every = save_every, print_freq = print_freq)
+
+                    trainer_pr.validate(reg_on = False)
+                    print(' Real pruned parameter ',en.par_count(model)-en.par_count(model_pruned))
                     log_file.close()
                     
                     

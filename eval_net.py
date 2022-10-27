@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import argparse
+import os
 import architectures as archs
 import quik_pruning as qp
 from trainer import Trainer
@@ -24,7 +25,7 @@ def pruned_par(model):
 
 
 
-def par_count(model):
+def par_count_old(model):
     res = 0
     for m in model.modules():
         if isinstance(m,nn.Conv2d):
@@ -33,6 +34,23 @@ def par_count(model):
         if isinstance(m,nn.Linear):
             dims = m.weight.shape
             res += dims[0]*dims[1]
+    return res
+
+def par_count(model,conv=True,bias_conv=True, linear=True, bias_linear=True, batchnorm=True, bias_batchnorm=True all_modules=True):
+    res = 0
+    for m in model.modules():
+        if isinstance(m,nn.Conv2d) and (conv or all_modules):
+            res+=par_count_module(m)
+        if isinstance(m,nn.Linear):
+            dims = m.weight.shape
+            res += dims[0]*dims[1]
+    return res
+
+def par_count_module(module):
+    res=0
+    for p in module.parameters():
+        if p.requires_grad:
+            res+= p.numel()
     return res
 
 def get_unpruned_filters(m):
@@ -244,7 +262,8 @@ def block_test_pruned():
 
 
 
-def go():
+def go(name):
+    # name='/local1/caccmatt/Pruning_prj/saves/save_V0.0.2-_resnet20_Cifar10_lr0.1_l1.8_a0.001_e300+200_bs128_t0.0001_m0.9_wd0.0005_mlstemp3_Mscl1.0/checkpoint.th'
 
     parser = argparse.ArgumentParser(description='evaluation of pruned net')
     parser.add_argument('--name',
@@ -255,11 +274,16 @@ def go():
     model_pruned=torch.nn.DataParallel(resnet_pruned.__dict__['resnet20'](10))
     qp.prune_thr(model,1.e-12)
     qp.prune_thr(model_pruned,1.e-12)
+    
     # base_checkpoint=torch.load("saves/save_" + args.name +"/checkpoint.th")
-    base_checkpoint=torch.load("/local1/caccmatt/Pruning_prj/saves/save_V0.0.2-_resnet20_Cifar10_lr0.1_l1.8_a0.001_e300+200_bs128_t0.0001_m0.9_wd0.0005_mlstemp3_Mscl1.0/checkpoint.th")
+    base_checkpoint=torch.load(name)
 
     model.load_state_dict(base_checkpoint['state_dict'])
     model_pruned.load_state_dict(base_checkpoint['state_dict'])
+    # breakpoint()
+    model.eval()
+    model_pruned.eval()
+    model_pruned(torch.rand([1,3,32,32]))
     dataset = dl.load_dataset("Cifar10", 128)
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
@@ -282,7 +306,7 @@ def go():
                                             criterion =criterion, optimizer = optimizer_pruned, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
 
     trainer.validate(reg_on = False)
-    trainer_pruned.validate(reg_on = False)
+    # trainer_pruned.validate(reg_on = False)
     _, sp_rate0 = at.sparsityRate(model)
     pr_par0 = pruned_par(model)
     tot0 = par_count(model)
@@ -297,11 +321,11 @@ def go():
     for m in model_pruned.modules():
         compress_block(m)
 
-    breakpoint()
+    # breakpoint()
 
     #print(model)
     #new_tot = par_count(model)
-    trainer.validate(reg_on = False)
+    # trainer.validate(reg_on = False)
     trainer_pruned.validate(reg_on = False)
 
     _, sp_rate1 = at.sparsityRate(model)
@@ -311,10 +335,19 @@ def go():
     _, sp_rate1_pr = at.sparsityRate(model_pruned)
     pr_par1_pr = pruned_par(model_pruned)
     tot1_pr = par_count(model_pruned)
-    print("tot berfore and after ",tot0, ' ', tot1, ' pr ', tot0_pr,' ', tot1_pr)
+    # print("tot berfore and after ",tot0, ' ', tot1, ' pr ', tot0_pr,' ', tot1_pr)
     #print("new_tot ", new_tot)
-    print("sparsity before and after ", sp_rate0, ' ', sp_rate1, ' pr ', sp_rate0_pr,' ', sp_rate1_pr )
-    print("pruned par before and after ", pr_par0, ' ', pr_par1, ' pr ', pr_par0_pr,' ', pr_par1_pr )
-
+    # print("sparsity before and after ", sp_rate0, ' ', sp_rate1, ' pr ', sp_rate0_pr,' ', sp_rate1_pr )
+    # print("pruned par before and after ", pr_par0, ' ', pr_par1, ' pr ', pr_par0_pr,' ', pr_par1_pr )
+    print('Old stats ', sp_rate0[1],' perc ', 100*sp_rate0[1]/tot0 )
+    print('New stats ', tot0-tot1_pr,' perc ', 100*(tot0-tot1_pr)/tot0 )
     # print((b_new-b)/tot)
     return model, model_pruned, dataset
+
+def eval_again():
+    name_list = os.listdir('saves')
+    for file_name in name_list:
+        if '_resnet20_Cifar10_'in file_name and 'original' not in file_name:
+            print(file_name)
+            go('saves/'+file_name+'/checkpoint.th')
+            breakpoint()
