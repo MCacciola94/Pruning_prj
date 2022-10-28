@@ -31,6 +31,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
+from aux_tools import mask_idx_list
 
 from torch.autograd import Variable
 
@@ -57,7 +58,8 @@ class BasicBlock(nn.Module):
     def __init__(self, in_planes, planes, stride=1, option='A'):
         super(BasicBlock, self).__init__()
         self.pruned_filters_conv2=[]
-        self.bn2_biases={}
+        self.pruned_shortcut=[]
+        
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=1, padding=1, bias=False)
@@ -78,48 +80,43 @@ class BasicBlock(nn.Module):
                 )
 
     def forward(self, x):
-        # if self.pruned_filters_conv2!=[]:
-            # breakpoint()
+
         out = F.relu(self.bn1(self.conv1(x)))
         out = self.bn2(self.conv2(out))
         skip_x = self.shortcut(x)
-        # breakpoint()
+        out=self.incompatible_sum(skip_x,out)
 
-        if self.pruned_filters_conv2!=[]:
-            # breakpoint()
-            not_pruned_comp=[]
-            ind_old=-1
-            for ind in self.pruned_filters_conv2:
-                # ind_next= self.pruned_filters_conv2[-1] if i<len(self.pruned_filters_conv2)-1 else self.pruned_filters_conv2[i+1]
-                not_pruned_comp+=[skip_x[:,ind_old+1:ind,:,:]]
-                # not_pruned_comp+=[skip_x[:,i+1:ind_next,:,:]]
-                ind_old=ind
-            not_pruned_comp+=[skip_x[:,ind_old+1:,:,:]]
-            # breakpoint()
-            skip_x_aux=torch.cat(not_pruned_comp,dim=1)
-            # if out.shape!=skip_x_aux.shape:
-            #     breakpoint()
-            out+=skip_x_aux
-
-            pruned_comp=[]
-            ind_old=0
-            for i,ind in enumerate(self.pruned_filters_conv2):
-                # ind_next= self.pruned_filters_conv2[-1] if i<len(self.pruned_filters_conv2)-1 else self.pruned_filters_conv2[i+1]
-                pruned_comp+=[out[:,ind_old:ind-i,:,:]]
-                pruned_comp+=[(skip_x[:,ind,:,:]+self.bn2_biases[ind]).unsqueeze(1)]
-                # pruned_com+=[out[:,ind:ind_next,:,:]]
-                ind_old=ind-i
-            pruned_comp+=[out[:,ind_old:,:,:]]
-            out=torch.cat(pruned_comp,dim=1)
-            # if out.shape!=skip_x.shape:
-            #     breakpoint()
-
-        else: out+=skip_x
-
-
-        # print(out.shape)
         out = F.relu(out)
         return out
+
+    def incompatible_sum(self,skip_x,out):
+        if self.pruned_filters_conv2!=[]:
+          
+            original_num_filters=len(self.pruned_filters_conv2)+len(self.conv2.size(0))
+            combined_unpruned= [i for i in range(original_num_filters) if i not in self.pruned_filters_conv2 and i not in self.pruned_shortcut ]
+            combined_pruned= [i for i in range(original_num_filters) if i in self.pruned_filters_conv2 and i in self.pruned_shortcut ]
+            shortcut_only_unpruned= [i for i in range(original_num_filters) if i in self.pruned_filters_conv2 and i not in self.pruned_shortcut ]
+            conv2_only_unpruned= [i for i in range(original_num_filters) if i not in self.pruned_filters_conv2 and i in self.pruned_shortcut ]
+
+            comb_unpr_conv2 = mask_idx_list(combined_unpruned,self.pruned_filters_conv2)
+            comb_unpr_shortcut = mask_idx_list(combined_unpruned,self.pruned_shortcut)
+
+            out_aux = out[:,comb_unpr_conv2,:]
+            skip_x_aux = out[:,comb_unpr_shortcut,:]
+            out_aux += skip_x_aux
+
+            final_idxs_aux = mask_idx_list(combined_unpruned,combined_pruned)
+            final_idxs_skip_x = mask_idx_list(comb_unpr_shortcut,combined_pruned)
+            final_idxs_out = mask_idx_list(comb_unpr_conv2,combined_pruned)
+
+            t_aux=torch.zeros(out.shape+[0,original_num_filters-len(combined_pruned)-out.size(1),0,0])
+            t_aux[:,final_idxs_aux,:]=out_aux
+            t_aux[:,final_idxs_out,:]=out[:,conv2_only_unpruned,:]
+            t_aux[:,final_idxs_skip_x,:]=skip_x[:,shortcut_only_unpruned,:]
+
+            return t_aux
+
+        else: return out+skip_x
 
 
 class ResNet(nn.Module):

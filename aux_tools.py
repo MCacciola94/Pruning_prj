@@ -173,3 +173,50 @@ def blockwise_M(net, const = False, scale = 1.0):
 def noReg(net, loss, lamb=0.1):
     return loss,0
 
+
+def incompatible_sum(self,t1,t2,rm_idxs1,rm_idxs2):
+        if rm_idxs1!=[] or rm_idxs2!=[]:
+          
+            original_num_filters=len(rm_idxs1)+len(t1.size(0))
+            combined_unpruned= [i for i in range(original_num_filters) if i not in rm_idxs1 and i not in rm_idxs2 ]
+            combined_pruned= [i for i in range(original_num_filters) if i in rm_idxs1 and i in rm_idxs2 ]
+            shortcut_only_unpruned= [i for i in range(original_num_filters) if i in rm_idxs1 and i not in rm_idxs2 ]
+            conv2_only_unpruned= [i for i in range(original_num_filters) if i not in rm_idxs1 and i in rm_idxs2 ]
+
+            comb_unpr_conv2 = mask_idx(combined_unpruned,rm_idxs1)
+            comb_unpr_shortcut = mask_idx(combined_unpruned,rm_idxs2)
+
+            out_aux = out[:,comb_unpr_conv2,:]
+            t2_aux = out[:,comb_unpr_shortcut,:]
+            out_aux += t2_aux
+
+            final_idxs_aux = mask_idx(combined_unpruned,combined_pruned)
+            final_idxs_t2 = mask_idx(comb_unpr_shortcut,combined_pruned)
+            final_idxs_out = mask_idx(comb_unpr_conv2,combined_pruned)
+
+            t_aux=torch.zeros(out.shape+[0,original_num_filters-len(combined_pruned)-out.size(1),0,0])
+            t_aux[:,final_idxs_aux,:]=out_aux
+            t_aux[:,final_idxs_out,:]=out[:,conv2_only_unpruned,:]
+            t_aux[:,final_idxs_t2,:]=t2[:,shortcut_only_unpruned,:]
+            
+            return t_aux
+
+        else: return out+t2
+
+def mask_idx_list(idx_list,removed_idxs):
+    
+    l=[]
+    count=0
+    removed_idx.sort()
+
+    for idx in idx_list:
+
+        while removed_idx[count]<=idx:
+            count+=1
+           
+        l.append(idx+count)
+
+    return l
+
+
+
