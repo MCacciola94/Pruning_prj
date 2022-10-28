@@ -64,7 +64,7 @@ class Grid_Search():
         save_every = conf1.getint("save_every", str((epochs+finetuning_epochs)*0.2))
         print_freq = conf1.getint("print_freq", "100")
         M_scale = conf1.getfloat("M_scale", 1.0)
-        structs = conf1.get("structs", 'single_convs')
+        structs = conf1.get("structs", 'convs_and_batchnorm')
         base_name = conf1.get("base_name")
         ##############################################################
 

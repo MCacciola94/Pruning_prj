@@ -7,7 +7,7 @@ import numpy as np
 
 
 class PerspReg: 
-    def __init__(self,alpha,M, option= 'single_convs'):
+    def __init__(self,alpha,M, option= 'convs_and_batchnorm'):
         self.alpha=alpha
         self.M=M
         self.const=(torch.sqrt(torch.Tensor([alpha/(1-alpha)]))).cuda()

@@ -67,6 +67,129 @@ def get_unpruned_filters(m):
     
     return idx
 
+def compress_conv_filters(conv, idx):
+    prune.remove(conv,"weight")
+    weight = conv.weight.data
+    weight = torch.index_select(weight, dim = 0, index = idx)
+    conv.weight = nn.Parameter(weight)
+    conv.out_channels = conv.weight.shape[0]
+
+def compress_conv_channels(conv, idx):    
+    prune.remove(conv,"weight")
+    weight = conv.weight.data
+    weight = torch.index_select(weight, dim = 1, index = idx)
+    conv.weight = nn.Parameter(weight)
+    conv.in_channels = conv.weight.shape[1]
+
+def compress_linear_in(lin, idx):    
+    prune.remove(lin,"weight")
+    weight = lin.weight.data
+    weight = torch.index_select(weight, dim = 0, index = idx)
+    lin.weight = nn.Parameter(weight)
+    lin.in_features = lin.weight.shape[0]
+
+def compress_batchnorm(bn,idx):
+    prune.remove(bn,"bias")
+    prune.remove(bn,"weight")
+    weight = bn.weight.data
+    bias = bn.bias.data
+    buffers = bn._buffers
+    weight= torch.index_select(weight, dim = 0, index = idx)
+    bias= torch.index_select(bias, dim = 0, index = idx)
+    buffers['running_mean']=torch.index_select(buffers['running_mean'], dim = 0, index = idx)
+    buffers['running_var']=torch.index_select(buffers['running_var'], dim = 0, index = idx)
+    bn.weight = nn.Parameter(weight)
+    bn.bias = nn.Parameter(bias)
+    bn._buffers=buffers
+    bn.num_features=bn.weight.shape[0]
+
+def compress_conv_bn_conv(conv1,bn1,conv2):
+    device='cpu'
+    if torch.cuda.is_available():
+        device= 'cuda:0'
+
+    idx = get_unpruned_filters(conv1)
+    
+    if len(idx) < conv1.out_channels:
+        if len(idx) == 0:
+            idx = [0]
+            
+        idx = torch.Tensor(idx).type(torch.int).to(device)
+        compress_conv_filters(conv1,idx)
+        compress_batchnorm(bn1,idx)
+        compress_conv_channels(conv2,idx)
+
+    return idx
+
+def compress_conv_bn_shortcut(conv1,bn,shortcut,next_module):
+    device='cpu'
+    if torch.cuda.is_available():
+        device= 'cuda:0'
+
+    original_out_channles=conv1.weight.size(0)
+
+    idx = get_unpruned_filters(conv1)
+    
+    if len(idx) < conv1.out_channels:
+        if len(idx) == 0:
+                    idx = [0]
+        idx = torch.Tensor(idx).type(torch.int).to(device)
+        compress_conv_filters(conv1,idx)
+        compress_batchnorm(bn,idx)
+      
+    
+    if isinstance(nn.Sequential,shortcut) and len(shortcut)>0:
+        conv_sc =shortcut[0]
+        bn_sc =shortcut[1]
+
+        idx_sc = get_unpruned_filters(conv_sc)
+        if len(idx_sc) < conv1.out_channels:
+            if len(idx_sc) == 0:
+                        idx = [0]
+            idx_sc = torch.Tensor(idx_sc).type(torch.int).to(device)
+            compress_conv_filters(conv_sc,idx_sc)
+            compress_batchnorm(bn_sc,idx_sc)
+
+    else: idx_sc= []        
+
+    if isinstance(next_module,nn.Conv2d):
+        idx_channels_next_module= [i for i in next_module.in_channels if i in idx and i in idx_sc]
+
+        compress_conv_channels(next_module,idx_channels_next_module)      
+    
+    if isinstance(next_module,nn.Linear):
+        idx_channels_next_module= [i for i in original_out_channles if i in idx and i in idx_sc]
+        channel_size = next_module.in_features/original_out_channles
+        idx_aux=[]
+        for i in  idx_channels_next_module:
+            idx_aux =+ [i*channel_size + j for j in range(channel_size)]
+        
+        idx_channels_next_module = idx_aux
+        compress_linear_in(next_module,idx_channels_next_module)      
+    
+    return idx, idx_sc
+
+def compress_basicblock(block,next_module):
+
+    compress_conv_bn_conv(block.conv1,block.bn1,block.conv2)
+    
+    idx_conv2, idx_sc= compress_conv_bn_shortcut(block.conv2,block.bn2,block.shortcut,next_module)
+
+    block.pruned_filters_conv2=idx_conv2
+    block.pruned_shortcut = idx_sc
+
+def compress_bottleneck(block,next_module):
+
+    compress_conv_bn_conv(block.conv1,block.bn1,block.conv2)
+
+    compress_conv_bn_conv(block.conv2,block.bn2,block.conv3)
+    
+    idx_conv3, idx_sc= compress_conv_bn_shortcut(block.conv3,block.bn3,block.shortcut,next_module)
+
+    block.pruned_filters_conv3=idx_conv3
+    block.pruned_shortcut = idx_sc
+
+
 def compress_block(block):
     device='cpu'
     if torch.cuda.is_available():
@@ -155,6 +278,129 @@ def compress_block(block):
 
             return idx
 
+def compress_bottleneck(block):
+    device='cpu'
+    if torch.cuda.is_available():
+        device= 'cuda:0'
+    if isinstance(block,resnetBig.Bottleneck) or isinstance(block,resnetBig_pruned.Bottleneck):
+        c1 = block._modules["conv1"]
+        c2 = block._modules["conv2"]
+        c3 = block._modules["conv3"]
+        b1= block._modules['bn1']
+        b2= block._modules['bn2']
+        b3= block._modules['bn3']
+
+        d1 = c1.weight.data
+        d2 = c2.weight.data
+        d3 = c3.weight.data
+
+        db1=b1.weight.data
+        db2=b1.bias.data
+        db3=b1._buffers
+
+        ddb1=b2.weight.data
+        ddb2=b2.bias.data
+        ddb3=b2._buffers
+
+        dddb1=b3.weight.data
+        dddb2=b3.bias.data
+        dddb3=b3._buffers
+  
+        idx = get_unpruned_filters(c1)
+       
+        idx2 = get_unpruned_filters(c2)
+
+        idx3 = get_unpruned_filters(c3)
+        
+
+        if len(idx) < c1.out_channels:
+            prune.remove(c1,"weight")
+            prune.remove(b1,"bias")
+            prune.remove(b1,"weight")
+
+        if len(idx) < c1.out_channels or len(idx2) < c2.out_channels:
+            prune.remove(c2,"weight")
+            prune.remove(b2,"weight")
+            prune.remove(b2,"bias")
+
+        if len(idx2) < c2.out_channels or ( isinstance(block,resnetBig_pruned.Bottleneck)  and len(idx3) < c3.out_channels):
+            prune.remove(c3,"weight")
+        
+        if isinstance(block,resnetBig_pruned.Bottleneck)  and len(idx3) < c3.out_channels:
+            prune.remove(b3,"weight")
+            prune.remove(b3,"bias")
+
+        # print(idx)
+        if len(idx) < c1.out_channels:
+            if len(idx) == 0:
+                idx = [0]
+                # print('All pruned', c1.in_channels*c1.kernel_size[0]*c1.kernel_size[1]+c2.out_channels*c2.kernel_size[0]*c2.kernel_size[1])
+            
+            idx = torch.Tensor(idx).type(torch.int).to(device)
+            d1 = torch.index_select(d1, dim = 0, index = idx)
+            c1.weight = nn.Parameter(d1)
+            c1.out_channels = c1.weight.shape[0]
+            
+           
+            db1= torch.index_select(db1, dim = 0, index = idx)
+            db2= torch.index_select(db2, dim = 0, index = idx)
+            db3['running_mean']=torch.index_select(db3['running_mean'], dim = 0, index = idx)
+            db3['running_var']=torch.index_select(db3['running_var'], dim = 0, index = idx)
+            b1.weight = nn.Parameter(db1)
+            b1.bias = nn.Parameter(db2)
+            b1._buffers=db3
+            b1.num_features=b1.weight.shape[0]
+
+
+            d2 = torch.index_select(d2, dim = 1, index = idx)
+            if len(idx2) == 0:
+                idx2 = [0]
+                # print('All pruned')
+            # breakpoint()
+            idx2 = torch.Tensor(idx2).type(torch.int).to(device)
+            d2 = torch.index_select(d2, dim = 0, index = idx2)
+            c2.weight = nn.Parameter(d2)
+            c2.in_channels = c2.weight.shape[1]
+            c2.out_channels = c2.weight.shape[0]
+
+            ddb1= torch.index_select(ddb1, dim = 0, index = idx2)
+            ddb2= torch.index_select(ddb2, dim = 0, index = idx2)
+            ddb3['running_mean']=torch.index_select(ddb3['running_mean'], dim = 0, index = idx2)
+            ddb3['running_var']=torch.index_select(ddb3['running_var'], dim = 0, index = idx2)
+            b2.weight = nn.Parameter(ddb1)
+            b2.bias = nn.Parameter(ddb2)
+            b2._buffers=ddb3
+            b2.num_features=b2.weight.shape[0]
+
+            
+
+            d3 = torch.index_select(d3, dim = 1, index = idx2)
+            if isinstance(block,resnetBig_pruned.Bottleneck) and len(idx3) < c3.out_channels:
+                if len(idx3) == 0:
+                    idx3 = [0]
+                    # print('All pruned')
+                # breakpoint()
+                idx3 = torch.Tensor(idx3).type(torch.int).to(device)
+                d3 = torch.index_select(d3, dim = 0, index = idx3)
+                pruned_idx=[i  for i in range(c3.out_channels) if i not in idx3]
+                block.pruned_filters_conv3=pruned_idx
+                block.bn3_biases={i:dddb2[i] for i in pruned_idx}
+
+                dddb1= torch.index_select(dddb1, dim = 0, index = idx3)
+                dddb2= torch.index_select(dddb2, dim = 0, index = idx3)
+                dddb3['running_mean']=torch.index_select(dddb3['running_mean'], dim = 0, index = idx3)
+                dddb3['running_var']=torch.index_select(dddb3['running_var'], dim = 0, index = idx3)
+                b3.weight = nn.Parameter(dddb1)
+                b3.bias = nn.Parameter(dddb2)
+                b3._buffers=dddb3
+                b3.num_features=b3.weight.shape[0]
+
+            c3.weight = nn.Parameter(d3)
+            c3.in_channels = c3.weight.shape[1]
+            c3.out_channels = c3.weight.shape[0]
+            
+
+            return idx
 
 
 def prune_block_channels(block):
