@@ -76,6 +76,7 @@ class BasicBlock(nn.Module):
                                             # F.pad(x[:, :, ::2, ::2], (0, 0, 0, 0, planes//4, planes//4), "constant", 0))
                 self.shortcut = LambdaLayer(lambda x: x[:, :, ::2, ::2])
                 self.pruned_shortcut = [i for i  in range(planes//4)]+ [i+3*(planes//4) for i  in range(planes//4)]
+                self.numb_added_planes = (planes//4)*2
             elif option == 'B':
                 self.shortcut = nn.Sequential(
                      nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
@@ -118,9 +119,9 @@ class BasicBlock(nn.Module):
             shortcut_only_unpruned = mask_idx_list(shortcut_only_unpruned,self.pruned_shortcut)
             conv2_only_unpruned = mask_idx_list(conv2_only_unpruned,self.pruned_filters_conv2)
  
-            # breakpoint()
             final_shape= [out.size(0),original_num_filters-len(combined_pruned),out.size(2),out.size(3)]
             t_aux=torch.zeros(final_shape).to(device)
+            
             
             t_aux[:,final_idxs_aux,:]=out_aux
             t_aux[:,final_idxs_out,:]=out[:,conv2_only_unpruned,:]

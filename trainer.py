@@ -80,38 +80,29 @@ class Trainer():
             return 0
 
         spars, tot_p = at.sparsityRate(self.model)
-        print("Total parameter pruned:", tot_p[0], "(unstructured)", tot_p[1], "(structured)")
+        print("Total parameter pruned without thresholding:", tot_p[0], "(unstructured)", tot_p[1], "(structured)")
 
         # at.maxVal(self.model)   
-
-
         # Pruning parameters under the threshold
-        qp.prune_thr(self.model,self.threshold)
 
+        self.binary_thr_search(10)
         spars, tot_p = at.sparsityRate(self.model)
         
-        print("\nTotal parameter pruned:", tot_p[0], "(unstructured)", tot_p[1],"(structured)\n")
+        print("\n Total parameter pruned after unstruct thresholding:", tot_p[0], "(unstructured)", tot_p[1],"(structured)\n")
 
         self.validate()
 
-
-
-
-
-
-    #Finetuning of the pruned model
-        print("\n Total elapsed time ", datetime.now()-start,"\n FINETUNING\n")
-        self.best_prec1 = 0
-
         #recovering all pruned weights that are not in a pruned entity
-        qp.prune_struct(self.model,self.threshold_str)
-
+        self.binary_thr_struct_search(10)
         spars, tot_ = at.sparsityRate(self.model)
         
 
-        print("\nTotal parameter pruned:", tot_p[0], "(unstructured)", tot_p[1],"(structured)\n")
+        print("\n Total parameter pruned after struct thresholding:", tot_p[0], "(unstructured)", tot_p[1],"(structured)\n")
 
         self.validate()
+        #Finetuning of the pruned model
+        print("\n Total elapsed time ", datetime.now()-start,"\n FINETUNING\n")
+        self.best_prec1 = 0
 
 
         for epoch in range(epochs, epochs + finetuning_epochs):
@@ -296,7 +287,7 @@ class Trainer():
                 batch_time.update(time.time() - end)
                 end = time.time()
                 
-                if i % self.print_freq == 0:
+                if (i+1) % (self.print_freq//2) == 0:
                     if self.top5_comp:
                         print('Test: [{0}/{1}]\t'
                             'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
@@ -324,25 +315,100 @@ class Trainer():
         return top1.avg
 
         
-    def iterative_thr_search(self,iters):
+    def binary_thr_search(self,iters):
+        print('UNSTRUCT THRESHOLDING')
 
-        thr =self.threshold
-
+        a=0
+        b=1e-1
+        last_feas_thr=a
+        
         valid_loader_bck = self.dataset["valid_loader"]
-        self.dataset["valid_loader"]=self.dataset["train_loader"]
+        print_freq_bkp =self.print_freq
+        self.print_freq= int(1e10)
+        self.dataset["valid_loader"]=self.dataset["stable_train_loader"]
+        print('original accuracy')
         original_acc = self.validate(reg_on=False)
 
-        qp.prune_thr(self.model,0)
+        qp.prune_thr(self.model,1e-30)
         self.validate(reg_on=False)
 
-        origianl_state = self.model.state_dict()
+        original_state = self.model.state_dict()
         
         for i in range(iters):
+            thr=a+(b-a)*0.5
+            print('current threshold ', thr)
             qp.prune_thr(self.model,thr)
             acc = self.validate(reg_on=False)
-            if original_acc-acc<0.05:
-                best_acc=acc
-                best_thr=thr
+            
+            if original_acc-acc<self.threshold:
+                a=thr
+                last_feas_thr=thr
+            else :
+                b=thr
+                self.model.load_state_dict(original_state)
+                self.model(torch.rand([1,3,32,32]))
+                # print('resuming')
+                # self.validate(reg_on=False)
+
+        self.model.load_state_dict(original_state)
+        self.model(torch.rand([1,3,32,32]))
+
+        qp.prune_thr(self.model,last_feas_thr)
+        print('Final unstruct threshold ', last_feas_thr)
+        self.validate(reg_on=False)
+
+        self.dataset["valid_loader"]=valid_loader_bck
+        self.print_freq= print_freq_bkp
+
+        
+    def binary_thr_struct_search(self,iters):
+        print('STRUCT THRESHOLDING')
+
+        a=0
+        b=1e-1
+        last_feas_thr=a
+        
+        valid_loader_bck = self.dataset["valid_loader"]
+        print_freq_bkp =self.print_freq
+        self.print_freq= int(1e10)
+        self.dataset["valid_loader"]=self.dataset["stable_train_loader"]
+        print('original accuracy')
+        original_acc = self.validate(reg_on=False)
+       
+        qp.prune_thr(self.model,1e-30)
+        self.validate(reg_on=False)
+
+        original_state = self.model.state_dict()
+        
+        for i in range(iters):
+            thr=a+(b-a)*0.5
+            print('current threshold ', thr)
+
+            qp.prune_struct(self.model,thr)
+            
+            acc = self.validate(reg_on=False)
+            
+            if original_acc-acc<self.threshold_str:
+                a=thr
+                last_feas_thr=thr
+            else:
+                b=thr
+                self.model.load_state_dict(original_state)
+                self.model(torch.rand([1,3,32,32]))
+                # print('resuming')
+                # self.validate(reg_on=False)
+
+        self.model.load_state_dict(original_state)
+        self.model(torch.rand([1,3,32,32]))
+
+        qp.prune_struct(self.model,last_feas_thr)
+        print('Final struct threshold ', last_feas_thr)
+        self.validate(reg_on=False)
+
+
+
+        self.dataset["valid_loader"]=valid_loader_bck
+        self.print_freq= print_freq_bkp
 
 
 

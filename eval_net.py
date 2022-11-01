@@ -151,8 +151,7 @@ def compress_shortcut_inp(block,idx_sc_pr):
             compress_channels(sc.conv1,[i for i in range(sc.conv1.weight.size(1)) if i not in idx_sc_pr])
         else: block.pruned_shortcut= idx_sc_pr
     elif 'LambdaLayer' in str(type(sc)):
-        expansion = (sc(torch.rand([1,2,3,3])).size(1)-2)/2
-        block.pruned_shortcut+= [i+expansion for i in idx_sc_pr]
+        block.pruned_shortcut+= [i+block.numb_added_planes//2 for i in idx_sc_pr]
 
 # Copress an isolated sequence conv1->batchnorm->conv2, where the compression is consequence of the maskwise pruned filters of conv1
 def compress_conv_bn_conv(conv1,bn1,conv2):
@@ -290,7 +289,7 @@ def compress_resnet(net):
 #Prune resnet20 starting froma checkpoint
 def unit_test_2010(name):
     
-    name='saves/save_V1.1.0-_resnet20_Cifar10_lr0.1_l2.7_a0.0001_e300+200_bs128_t0.0001_tstr0.05_m0.9_wd0.0005_mlstemp3_Mscl1.0_structconvs_and_batchnorm/model_best_val.th'
+    name='saves/save_V1.1.0-_resnet20_Cifar10_lr0.10001_l10.0_a0.1_e3+1_bs128_t0.05_tstr0.05_m0.9_wd0.0005_mlstemp3_Mscl1.0_structconvs_and_batchnorm/model_best_val.th'
     model_pruned=torch.nn.DataParallel(resnet_pruned.__dict__['resnet20'](10))
     qp.prune_thr(model_pruned,1.e-12)
 

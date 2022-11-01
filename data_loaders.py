@@ -53,8 +53,15 @@ def cifar10_loader(batch_size):
         ])),
         batch_size = 128, shuffle = False,
         num_workers = 4, pin_memory = True)
-        
-    return {"train_loader": train_loader, "valid_loader": val_loader}
+    
+    stable_train_loader = torch.utils.data.DataLoader(
+        datasets.CIFAR10(root='./data', train = True, transform = transforms.Compose([
+            transforms.ToTensor(),
+            normalize,
+        ])),
+        batch_size = 128, shuffle = False,
+        num_workers = 4, pin_memory = True)
+    return {"train_loader": train_loader, "valid_loader": val_loader, "stable_train_loader": stable_train_loader}
 
 
 
