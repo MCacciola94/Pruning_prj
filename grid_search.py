@@ -20,6 +20,8 @@ import resnet_pruned
 import eval_net as en
 import quik_pruning as qp
 
+from time import time
+
 
 ##########################################################################################
 milestones_dict = {"emp1": [120, 200, 230, 250, 350, 400, 450], 
@@ -79,7 +81,7 @@ class Grid_Search():
 
                     name = (base_name + "_" + arch + "_" + dset + "_lr" + str(lr) + "_l" + str(lamb) + "_a" + 
                             str(alpha) + "_e" + str(epochs) + "+" + str(finetuning_epochs) + "_bs" + str(batch_size) +
-                            "_t" + str(threshold)+ "_tstr" + str(threshold_str) + "_m" + str(momentum) + "_wd" + str(weight_decay) + "_mlst" + milestones + "_Mscl" + str(M_scale)+ "_struct" + structs)
+                            "_t" + str(threshold)+ "_tstr" + str(threshold_str) + "_m" + str(momentum) + "_wd" + str(weight_decay) + "_mlst" + milestones + "_Mscl" + str(M_scale)+ "_struct" + structs+'_id'+str(int(time())))
 
                     save_dir = "saves/save_" + name
                     log_file = open("temp_logs/" + name, "w")

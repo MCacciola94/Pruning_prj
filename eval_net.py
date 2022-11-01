@@ -10,6 +10,7 @@ import aux_tools as at
 import torch.nn.functional as F
 import resnet, resnet_pruned
 import torch.nn.utils.prune as prune
+import copy
 
 #compute number of zero in weight masks of convolutional layers
 def pruned_par(model):
@@ -121,7 +122,7 @@ def compress_conv_channels(conv, idx_not_pr):
     conv.in_channels = conv.weight.shape[1]
 
 # compress a linear layer selecting the desired input features
-def compress_linear_in(lin, idx_not_pr):    
+def compress_linear_in(lin, idx_not_pr):
     weight = lin.weight.data
     weight = torch.index_select(weight, dim = 1, index = idx_not_pr)
     lin.weight = nn.Parameter(weight)
@@ -149,7 +150,7 @@ def compress_shortcut_inp(block,idx_sc_pr):
     if isinstance(sc, nn.Sequential):
         if  len(sc)>0:
             compress_channels(sc.conv1,[i for i in range(sc.conv1.weight.size(1)) if i not in idx_sc_pr])
-        else: block.pruned_shortcut= idx_sc_pr
+        else: block.pruned_shortcut += idx_sc_pr
     elif 'LambdaLayer' in str(type(sc)):
         block.pruned_shortcut+= [i+block.numb_added_planes//2 for i in idx_sc_pr]
 
@@ -345,7 +346,25 @@ def unit_test_2010(name):
     # print("pruned par before and after ", pr_par0, ' ', pr_par1, ' pr ', pr_par0_pr,' ', pr_par1_pr )
 
     print('New stats ', tot0_pr-tot1_pr,' perc ', 100*(tot0_pr-tot1_pr)/tot0_pr )
-    # print((b_new-b)/tot)
+    fully_pruned= resnet_pruned.FullyCompressedResNet(copy.deepcopy(model_pruned))
+    # breakpoint()
+
+
+    trainer_fully_pruned = Trainer(model = fully_pruned, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, threshold_str=1e-4,
+                                            criterion =criterion, optimizer = optimizer_pruned, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
+    print('Fully pruned model acc ')
+    trainer_fully_pruned.validate(reg_on = False)
+
+
+ 
+
+    _, sp_rate_fll = at.sparsityRate(fully_pruned)
+    pr_par_fll = pruned_par(fully_pruned)
+    tot_fll = par_count(fully_pruned)
+
+    print('Final stats ', tot0_pr-tot_fll,' perc ', 100*(tot0_pr-tot_fll)/tot0_pr )
+
+
     return model_pruned, dataset
 
 def eval_again():
