@@ -57,6 +57,7 @@ class Grid_Search():
         finetuning_epochs = conf1.getint("finetuning_epochs")
         batch_size = conf1.getint("batch_size")
         threshold = conf1.getfloat("threshold")
+        threshold_str = conf1.getfloat("threshold_str")
         momentum = conf1.getfloat("momentum")
         weight_decay = conf1.getfloat("weight_decay")
         milestones = conf1.get("milestones")
@@ -78,7 +79,7 @@ class Grid_Search():
 
                     name = (base_name + "_" + arch + "_" + dset + "_lr" + str(lr) + "_l" + str(lamb) + "_a" + 
                             str(alpha) + "_e" + str(epochs) + "+" + str(finetuning_epochs) + "_bs" + str(batch_size) +
-                            "_t" + str(threshold) + "_m" + str(momentum) + "_wd" + str(weight_decay) + "_mlst" + milestones + "_Mscl" + str(M_scale)+ "_struct" + structs)
+                            "_t" + str(threshold)+ "_tstr" + str(threshold_str) + "_m" + str(momentum) + "_wd" + str(weight_decay) + "_mlst" + milestones + "_Mscl" + str(M_scale)+ "_struct" + structs)
 
                     save_dir = "saves/save_" + name
                     log_file = open("temp_logs/" + name, "w")
@@ -128,7 +129,7 @@ class Grid_Search():
 
 
 
-                    trainer = Trainer(model = model, dataset = dataset, reg = reg, lamb = lamb, threshold = threshold, 
+                    trainer = Trainer(model = model, dataset = dataset, reg = reg, lamb = lamb, threshold = threshold, threshold_str = threshold_str, 
                                         criterion =criterion, optimizer = optimizer, lr_scheduler = lr_scheduler, save_dir = save_dir, save_every = save_every, print_freq = print_freq)
 
 
@@ -146,15 +147,18 @@ class Grid_Search():
                     qp.prune_thr(model_pruned,1.e-12)
                     base_checkpoint=torch.load(save_dir+'/model_best_val.th')
                     model_pruned.load_state_dict(base_checkpoint['state_dict'])
-                    model.eval()
-                    model_pruned(torch.rand([1,3,32,32]))
-                    for m in model_pruned.modules():
-                        en.compress_block(m)
 
-                    trainer_pr = Trainer(model = model_pruned, dataset = dataset, reg = reg, lamb = lamb, threshold = threshold, 
+                    model_pruned.eval()
+
+                    trainer_pr = Trainer(model = model_pruned, dataset = dataset, reg = reg, lamb = lamb, threshold = threshold, threshold_str = threshold_str, 
                                         criterion =criterion, optimizer = None, lr_scheduler = lr_scheduler, save_dir = save_dir, save_every = save_every, print_freq = print_freq)
 
+                    model_pruned(torch.rand([1,3,32,32]))
+
+                    en.compress_resnet(model_pruned)
+
                     trainer_pr.validate(reg_on = False)
+                    
                     print(' Real pruned parameter ',en.par_count(model)-en.par_count(model_pruned))
                     log_file.close()
                     

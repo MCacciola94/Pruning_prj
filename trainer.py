@@ -7,6 +7,7 @@ import torch
 from torch.nn.utils import prune
 
 import aux_tools as at
+import quik_pruning as qp
 
 
 
@@ -16,12 +17,13 @@ import aux_tools as at
 
 class Trainer():
 
-    def __init__(self, model, dataset, reg, lamb, threshold, criterion, optimizer, lr_scheduler, save_dir, save_every,  print_freq):
+    def __init__(self, model, dataset, reg, lamb, threshold, threshold_str, criterion, optimizer, lr_scheduler, save_dir, save_every,  print_freq):
         self.model = model
         self.dataset = dataset
         self.reg = reg
         self.lamb = lamb
         self.threshold = threshold
+        self.threshold_str = threshold_str
         self.criterion = criterion
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
@@ -72,44 +74,22 @@ class Trainer():
                     'best_prec1': self.best_prec1,
                 }, is_best, filename=os.path.join(self.save_dir, 'checkpoint.th'))
 
-            # save_checkpoint({
-            #     'state_dict': self.model.state_dict(),
-            #     'best_prec1': self.best_prec1,
-            # }, is_best, filename=os.path.join(self.save_dir, 'model.th'))
-
 
         print("\n Elapsed time for training ", datetime.now()-start)
         if self.lamb == 0.0:
             return 0
 
         spars, tot_p = at.sparsityRate(self.model)
-        # i=0
-        # while i < len(spars):
-        #     print("\n Percentage of pruned entities ", (np.array(spars[i])==1).sum()/np.array(spars[i]).size, "total entities in this layer", np.array(spars[i]).size)
-        #     i=i+1
         print("Total parameter pruned:", tot_p[0], "(unstructured)", tot_p[1], "(structured)")
 
-        at.maxVal(self.model)   
+        # at.maxVal(self.model)   
 
 
         # Pruning parameters under the threshold
-        for m in self.model.modules(): 
-            if hasattr(m, 'weight'):
-                pruning_par=[((m,'weight'))]
-
-                if hasattr(m, 'bias') and not(m.bias==None):
-                        pruning_par.append((m,'bias'))
-
-                
-                prune.global_unstructured(pruning_par, pruning_method=at.ThresholdPruning, threshold=self.threshold)
+        qp.prune_thr(self.model,self.threshold)
 
         spars, tot_p = at.sparsityRate(self.model)
         
-        #as above
-        # i=0
-        # while i < len(spars):
-        #     print("\n Percentage of pruned entities ", (np.array(spars[i])==1).sum()/np.array(spars[i]).size, "total entities in this layer", np.array(spars[i]).size)
-        #     i=i+1
         print("\nTotal parameter pruned:", tot_p[0], "(unstructured)", tot_p[1],"(structured)\n")
 
         self.validate()
@@ -124,21 +104,11 @@ class Trainer():
         self.best_prec1 = 0
 
         #recovering all pruned weights that are not in a pruned entity
-        for m in self.model.modules():
-            if isinstance(m,torch.nn.Conv2d):
-                for i in range(m.out_channels):
-                        if m.weight_mask[i,:].sum()/m.weight_mask[i,:].numel()>0.0001:
-                            m.weight_mask[i,:]=1
-                        else:
-                            m.weight_mask[i,:]=0
+        qp.prune_struct(self.model,self.threshold_str)
 
         spars, tot_ = at.sparsityRate(self.model)
         
-        #as above
-        # i=0
-        # while i < len(spars):
-        #     print("\n Percentage of pruned entities ", (np.array(spars[i])==1).sum()/np.array(spars[i]).size, "total entities in this layer", np.array(spars[i]).size)
-        #     i=i+1
+
         print("\nTotal parameter pruned:", tot_p[0], "(unstructured)", tot_p[1],"(structured)\n")
 
         self.validate()
@@ -177,10 +147,7 @@ class Trainer():
 
 
         spars, tot_p = at.sparsityRate(self.model)
-        # i=0
-        # while i < len(spars):
-        #     print("\n Percentage of pruned entities ", (np.array(spars[i])==1).sum()/np.array(spars[i]).size, "total entities in this layer", np.array(spars[i]).size)
-        #     i=i+1
+
         print("Total parameter pruned:", tot_p[0], "(unstructured)", tot_p[1],"(structured)")
         
         self.validate(reg_on = False)
@@ -288,7 +255,6 @@ class Trainer():
 
         # switch to evaluate mode
         self.model.eval()
-        # breakpoint()
         end = time.time()
         with torch.no_grad():
             for i, (input, target) in enumerate(self.dataset["valid_loader"]):
@@ -356,6 +322,32 @@ class Trainer():
 
 
         return top1.avg
+
+        
+    def iterative_thr_search(self,iters):
+
+        thr =self.threshold
+
+        valid_loader_bck = self.dataset["valid_loader"]
+        self.dataset["valid_loader"]=self.dataset["train_loader"]
+        original_acc = self.validate(reg_on=False)
+
+        qp.prune_thr(self.model,0)
+        self.validate(reg_on=False)
+
+        origianl_state = self.model.state_dict()
+        
+        for i in range(iters):
+            qp.prune_thr(self.model,thr)
+            acc = self.validate(reg_on=False)
+            if original_acc-acc<0.05:
+                best_acc=acc
+                best_thr=thr
+
+
+
+
+
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     """

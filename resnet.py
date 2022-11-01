@@ -130,7 +130,22 @@ class ResNet(nn.Module):
                     i+=1
         yield from blocks_list
 
+    def block_layer_sequence(self):
+       
+        for  i in range(len(self.layer1)-1):
+                yield self.layer1[i], self.layer1[i+1].conv1
+        yield self.layer1[-1], self.layer2[0].conv1
 
+
+        for  i in range(len(self.layer2)-1):
+                yield self.layer2[i], self.layer2[i+1].conv1
+        yield self.layer2[-1], self.layer3[0].conv1
+
+    
+        for  i in range(len(self.layer3)-1):
+                yield self.layer3[i], self.layer3[i+1].conv1
+        yield self.layer3[-1], self.linear
+                
 def resnet20(num_classes):
     return ResNet(BasicBlock, [3, 3, 3], num_classes = num_classes)
 

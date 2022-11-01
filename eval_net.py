@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import resnet, resnet_pruned
 import torch.nn.utils.prune as prune
 
+#compute number of zero in weight masks of convolutional layers
 def pruned_par(model):
     
     tot_pruned=0
@@ -23,19 +24,7 @@ def pruned_par(model):
 
     return tot_pruned
 
-
-
-def par_count_old(model):
-    res = 0
-    for m in model.modules():
-        if isinstance(m,nn.Conv2d):
-            dims = m.weight.shape
-            res += dims[0]*dims[1]*dims[2]*dims[3]
-        if isinstance(m,nn.Linear):
-            dims = m.weight.shape
-            res += dims[0]*dims[1]
-    return res
-
+#compute number of parmters of model, default takes into account all params from conv, linear and batchnorm
 def par_count(model,conv=True,bias_conv=True, linear=True, bias_linear=True, batchnorm=True, bias_batchnorm=True, all_modules=True):
     res = 0
     for m in model.modules():
@@ -51,6 +40,7 @@ def par_count(model,conv=True,bias_conv=True, linear=True, bias_linear=True, bat
 
     return res
 
+#count the number of a params of a module
 def par_count_module(module, bias):
     res=0
     for name, par in module.named_parameters():
@@ -58,6 +48,30 @@ def par_count_module(module, bias):
             res+= par.numel()
     return res
 
+#count the overall total number of a params of a model
+def par_count_all(model):
+    res=0
+    for par in model.parameters():
+        if par.requires_grad:
+            res+= par.numel()
+    return res
+
+
+#compare two model printing different params
+def find_diff_params(model1,model2):
+    params1=model1.state_dict()
+    params2=model2.state_dict()
+
+    for par in params1.keys():
+        if hasattr(par,'requires_grad') and par.requires_grad and par not in params2.keys():
+            print('not in mod2 ', par)
+
+    for par in params2.keys():
+        if hasattr(par,'requires_grad') and par.requires_grad and par not in params1.keys():
+            print('not in mod1 ', par)
+    
+
+# return the indexes of filters that are not completely pruned maskwise
 def get_unpruned_filters(m):
     idx = []
     if isinstance(m,nn.Conv2d):
@@ -67,472 +81,223 @@ def get_unpruned_filters(m):
     
     return idx
 
-def compress_conv_filters(conv, idx):
-    prune.remove(conv,"weight")
+#remove parameters created by pytorch pruning function in conv layers
+def remove_additional_pars_conv(conv):
+
+    weight_bkp = conv.weight.data
+    prune.remove(conv,'weight')
+    conv.weight=nn.Parameter(weight_bkp)
+    
+    if hasattr(conv,'bias') and conv.bias is not None:
+        bias_bkp = conv.bias.data
+        prune.remove(conv,'bias')
+        conv.bias=nn.Parameter(bias_bkp)
+
+#remove parameters created by pytorch pruning function in batchnorm layers    
+def remove_additional_pars_bn(bn):
+    weight_bkp = bn.weight.data
+    bias_bkp = bn.bias.data
+    # buffers_bkp = {'running_mean': bn._buffers['running_mean'],'running_var': bn._buffers['running_var']}
+
+    prune.remove(bn,'weight')
+    prune.remove(bn,'bias')
+
+    bn.weight=nn.Parameter(weight_bkp)
+    bn.bias=nn.Parameter(bias_bkp)
+    # bn._buffers=buffers_bkp
+    
+# compress a conv layer selecting the desired output filters
+def compress_conv_filters(conv, idx_not_pr):
     weight = conv.weight.data
-    weight = torch.index_select(weight, dim = 0, index = idx)
+    weight = torch.index_select(weight, dim = 0, index = idx_not_pr)
     conv.weight = nn.Parameter(weight)
     conv.out_channels = conv.weight.shape[0]
 
-def compress_conv_channels(conv, idx):    
-    prune.remove(conv,"weight")
+# compress a conv layer selecting the desired input channels
+def compress_conv_channels(conv, idx_not_pr):    
     weight = conv.weight.data
-    weight = torch.index_select(weight, dim = 1, index = idx)
+    weight = torch.index_select(weight, dim = 1, index = idx_not_pr)
     conv.weight = nn.Parameter(weight)
     conv.in_channels = conv.weight.shape[1]
 
-def compress_linear_in(lin, idx):    
-    prune.remove(lin,"weight")
+# compress a linear layer selecting the desired input features
+def compress_linear_in(lin, idx_not_pr):    
     weight = lin.weight.data
-    weight = torch.index_select(weight, dim = 0, index = idx)
+    weight = torch.index_select(weight, dim = 1, index = idx_not_pr)
     lin.weight = nn.Parameter(weight)
-    lin.in_features = lin.weight.shape[0]
+    lin.in_features = lin.weight.shape[1]
 
-def compress_batchnorm(bn,idx):
-    prune.remove(bn,"bias")
-    prune.remove(bn,"weight")
+
+# compress a batchnorm layer selecting the desired features
+def compress_batchnorm(bn,idx_not_pr):
     weight = bn.weight.data
     bias = bn.bias.data
     buffers = bn._buffers
-    weight= torch.index_select(weight, dim = 0, index = idx)
-    bias= torch.index_select(bias, dim = 0, index = idx)
-    buffers['running_mean']=torch.index_select(buffers['running_mean'], dim = 0, index = idx)
-    buffers['running_var']=torch.index_select(buffers['running_var'], dim = 0, index = idx)
+
+    weight= torch.index_select(weight, dim = 0, index = idx_not_pr)
+    bias= torch.index_select(bias, dim = 0, index = idx_not_pr)
+    buffers['running_mean']=torch.index_select(buffers['running_mean'], dim = 0, index = idx_not_pr)
+    buffers['running_var']=torch.index_select(buffers['running_var'], dim = 0, index = idx_not_pr)
+
     bn.weight = nn.Parameter(weight)
     bn.bias = nn.Parameter(bias)
     bn._buffers=buffers
     bn.num_features=bn.weight.shape[0]
 
+def compress_shortcut_inp(block,idx_sc_pr):
+    sc=block.shortcut
+    if isinstance(sc, nn.Sequential):
+        if  len(sc)>0:
+            compress_channels(sc.conv1,[i for i in range(sc.conv1.weight.size(1)) if i not in idx_sc_pr])
+        else: block.pruned_shortcut= idx_sc_pr
+    elif 'LambdaLayer' in str(type(sc)):
+        expansion = (sc(torch.rand([1,2,3,3])).size(1)-2)/2
+        block.pruned_shortcut+= [i+expansion for i in idx_sc_pr]
+
+# Copress an isolated sequence conv1->batchnorm->conv2, where the compression is consequence of the maskwise pruned filters of conv1
 def compress_conv_bn_conv(conv1,bn1,conv2):
     device='cpu'
     if torch.cuda.is_available():
         device= 'cuda:0'
-
-    idx = get_unpruned_filters(conv1)
     
-    if len(idx) < conv1.out_channels:
-        if len(idx) == 0:
-            idx = [0]
+    idx_not_pr = get_unpruned_filters(conv1)
+    
+    if len(idx_not_pr) < conv1.out_channels:
+        if len(idx_not_pr) == 0:
+            idx_not_pr = [0]
             
-        idx = torch.Tensor(idx).type(torch.int).to(device)
-        compress_conv_filters(conv1,idx)
-        compress_batchnorm(bn1,idx)
-        compress_conv_channels(conv2,idx)
+        idx_not_pr = torch.Tensor(idx_not_pr).type(torch.int).to(device)
+        compress_conv_filters(conv1,idx_not_pr)
+        compress_batchnorm(bn1,idx_not_pr)
+        compress_conv_channels(conv2,idx_not_pr)
 
-    return idx
+    return idx_not_pr
 
-def compress_conv_bn_shortcut(conv1,bn,shortcut,next_module):
+# Copress an isolated sequence [(...->conv1->batchnorm)+(shortcut1)]->[(conv->...)+(shortcut2)], 
+# where the compression is consequence of the maskwise pruned filters of conv1 and shortcut1
+def compress_conv_bn_shortcut(conv1,bn,shortcut,pruned_shortcut,next_block):
     device='cpu'
     if torch.cuda.is_available():
         device= 'cuda:0'
 
     original_out_channles=conv1.weight.size(0)
 
-    idx = get_unpruned_filters(conv1)
+#Compress conv1 and batchnorm
+    idx_not_pr = get_unpruned_filters(conv1)
     
-    if len(idx) < conv1.out_channels:
-        if len(idx) == 0:
-                    idx = [0]
-        idx = torch.Tensor(idx).type(torch.int).to(device)
-        compress_conv_filters(conv1,idx)
-        compress_batchnorm(bn,idx)
+    if len(idx_not_pr) < conv1.out_channels:
+        if len(idx_not_pr) == 0:
+                    idx_not_pr = [0]
+        idx_not_pr = torch.Tensor(idx_not_pr).type(torch.int).to(device)
+        compress_conv_filters(conv1,idx_not_pr)
+        compress_batchnorm(bn,idx_not_pr)
       
-    
-    if isinstance(nn.Sequential,shortcut) and len(shortcut)>0:
+    # Deal with shortcut1. There are 3 cases: Sequential but empty, Sequential with conv-bn and LambdaLayer
+    if isinstance(shortcut,nn.Sequential) and len(shortcut)>0:
+        
         conv_sc =shortcut[0]
         bn_sc =shortcut[1]
 
-        idx_sc = get_unpruned_filters(conv_sc)
-        if len(idx_sc) < conv1.out_channels:
-            if len(idx_sc) == 0:
-                        idx = [0]
-            idx_sc = torch.Tensor(idx_sc).type(torch.int).to(device)
-            compress_conv_filters(conv_sc,idx_sc)
-            compress_batchnorm(bn_sc,idx_sc)
+        idx_sc_not_pr = get_unpruned_filters(conv_sc)
 
-    else: idx_sc= []        
+        if len(idx_sc_not_pr) < conv1.out_channels:
+            if len(idx_sc_not_pr) == 0:
+                idx_sc_not_pr = [0]
+            idx_sc_not_pr = torch.Tensor(idx_sc_not_pr).type(torch.int).to(device)
+            compress_conv_filters(conv_sc,idx_sc_not_pr)
+            compress_batchnorm(bn_sc,idx_sc_not_pr)
 
-    if isinstance(next_module,nn.Conv2d):
-        idx_channels_next_module= [i for i in next_module.in_channels if i in idx and i in idx_sc]
+    else: idx_sc_not_pr = [i for i in range(original_out_channles) if i not in pruned_shortcut]      
 
-        compress_conv_channels(next_module,idx_channels_next_module)      
+    # Adjust input of the following block. Again there are 3 cases for the shortcut (of next block this time)  
+
+    if hasattr(next_block,'conv1'):
+        idx_channels_next_layer_not_pr= [i for i in range(next_block.conv1.in_channels) if (i in idx_not_pr or i in idx_sc_not_pr)]
+        idx_channels_next_layer_not_pr = torch.Tensor(idx_channels_next_layer_not_pr).type(torch.int).to(device)
+
+        compress_conv_channels(next_block.conv1,idx_channels_next_layer_not_pr) 
+        compress_shortcut_inp(next_block,[i for i in range(original_out_channles) if i not in idx_channels_next_layer_not_pr])   
+  
     
-    if isinstance(next_module,nn.Linear):
-        idx_channels_next_module= [i for i in original_out_channles if i in idx and i in idx_sc]
-        channel_size = next_module.in_features/original_out_channles
+    if isinstance(next_block,nn.Linear):
+        idx_channels_next_layer_not_pr = [i for i in range(original_out_channles) if i in idx_not_pr or i in idx_sc_not_pr]
+        channel_size = next_block.in_features/original_out_channles
+        # print(channel_size)
         idx_aux=[]
-        for i in  idx_channels_next_module:
-            idx_aux =+ [i*channel_size + j for j in range(channel_size)]
+        for i in  idx_channels_next_layer_not_pr:
+            idx_aux += [i*channel_size + j for j in range(int(channel_size))]
         
-        idx_channels_next_module = idx_aux
-        compress_linear_in(next_module,idx_channels_next_module)      
+        idx_channels_next_layer_not_pr = idx_aux
     
-    return idx, idx_sc
+        idx_channels_next_layer_not_pr = torch.Tensor(idx_channels_next_layer_not_pr).type(torch.int).to(device)
+        
+        compress_linear_in(next_block,idx_channels_next_layer_not_pr)      
+    
+    return [i for i in range(original_out_channles) if i not in idx_not_pr], [i for i in range(original_out_channles) if i not in idx_sc_not_pr]
 
-def compress_basicblock(block,next_module):
+#Compress the classic resnet basicblok (2 conv, 2 batchnorm and a shortcut)
+def compress_basicblock(block,next_block):
 
     compress_conv_bn_conv(block.conv1,block.bn1,block.conv2)
     
-    idx_conv2, idx_sc= compress_conv_bn_shortcut(block.conv2,block.bn2,block.shortcut,next_module)
+    idx_conv2_pruned, idx_sc_pruned= compress_conv_bn_shortcut(block.conv2, block.bn2, block.shortcut, block.pruned_shortcut, next_block)
 
-    block.pruned_filters_conv2=idx_conv2
-    block.pruned_shortcut = idx_sc
+    block.pruned_filters_conv2=idx_conv2_pruned
+    block.pruned_shortcut = idx_sc_pruned
 
-def compress_bottleneck(block,next_module):
+#Compress the classic resnet bottleneck block (3 conv, 3 batchnorm and a shortcut)
+def compress_bottleneck(block,next_block):
 
     compress_conv_bn_conv(block.conv1,block.bn1,block.conv2)
 
     compress_conv_bn_conv(block.conv2,block.bn2,block.conv3)
     
-    idx_conv3, idx_sc= compress_conv_bn_shortcut(block.conv3,block.bn3,block.shortcut,next_module)
+    idx_conv3, idx_sc= compress_conv_bn_shortcut(block.conv3,block.bn3,block.shortcut, block.pruned_shortcut,next_block)
 
-    block.pruned_filters_conv3=idx_conv3
+    block.pruned_filters_conv3 = idx_conv3
     block.pruned_shortcut = idx_sc
 
 
-def compress_block(block):
-    device='cpu'
-    if torch.cuda.is_available():
-        device= 'cuda:0'
-    if isinstance(block,resnet.BasicBlock) or isinstance(block,resnet_pruned.BasicBlock):
-        c1 = block._modules["conv1"]
-        c2 = block._modules["conv2"]
-        b1= block._modules['bn1']
-        b2= block._modules['bn2']
+#Compress a resnet model that already have a pruning mask
+def compress_resnet(net):
+    if isinstance(net,nn.DataParallel):
+        net=net.module
 
-        d1 = c1.weight.data
-        d2 = c2.weight.data
+    # breakpoint()
 
-        db1=b1.weight.data
-        db2=b1.bias.data
-        db3=b1._buffers
+    #First part of the net that is outside the main layers
+    original_num_filters= net.conv1.weight.size(0)
+    idx_sc_not_pr=compress_conv_bn_conv(net.conv1,net.bn1,net.layer1[0].conv1)
+    compress_shortcut_inp(net.layer1[0],[i for i in range(original_num_filters) if i not in idx_sc_not_pr])
 
-        ddb1=b2.weight.data
-        ddb2=b2.bias.data
-        ddb3=b2._buffers
-  
-        idx = get_unpruned_filters(c1)
-       
-        idx2 = get_unpruned_filters(c2)
-        
+# Compress block by block, info about the next block is necessary
+    for block,next_block in net.blocks_sequence():
 
-        if len(idx) < c1.out_channels:
-            prune.remove(c1,"weight")
-            prune.remove(b1,"bias")
-            prune.remove(b1,"weight")
+        if 'BasicBlock' in str(type(block)):
+            compress_basicblock(block, next_block)
+        elif 'Bottleneck' in str(type(block)):
+            compress_bottleneck(block, next_block)
 
-        if len(idx) < c1.out_channels or ( isinstance(block,resnet_pruned.BasicBlock)  and len(idx2) < c2.out_channels):
-            prune.remove(c2,"weight")
-        
-        
-        if isinstance(block,resnet_pruned.BasicBlock) and len(idx2) < c2.out_channels:
-            prune.remove(b2,"weight")
-            prune.remove(b2,"bias")
-
-        # print(idx)
-        if len(idx) < c1.out_channels:
-            if len(idx) == 0:
-                idx = [0]
-                # print('All pruned', c1.in_channels*c1.kernel_size[0]*c1.kernel_size[1]+c2.out_channels*c2.kernel_size[0]*c2.kernel_size[1])
-            
-            idx = torch.Tensor(idx).type(torch.int).to(device)
-            d1 = torch.index_select(d1, dim = 0, index = idx)
-            c1.weight = nn.Parameter(d1)
-            c1.out_channels = c1.weight.shape[0]
-            
-           
-            db1= torch.index_select(db1, dim = 0, index = idx)
-            db2= torch.index_select(db2, dim = 0, index = idx)
-            db3['running_mean']=torch.index_select(db3['running_mean'], dim = 0, index = idx)
-            db3['running_var']=torch.index_select(db3['running_var'], dim = 0, index = idx)
-            b1.weight = nn.Parameter(db1)
-            b1.bias = nn.Parameter(db2)
-            b1._buffers=db3
-            b1.num_features=b1.weight.shape[0]
-            #works untill here
-            d2 = torch.index_select(d2, dim = 1, index = idx)
-            if isinstance(block,resnet_pruned.BasicBlock) and len(idx2) < c2.out_channels:
-                if len(idx2) == 0:
-                    idx2 = [0]
-                    # print('All pruned')
-                # breakpoint()
-                idx2 = torch.Tensor(idx2).type(torch.int).to(device)
-                d2 = torch.index_select(d2, dim = 0, index = idx2)
-                pruned_idx=[i  for i in range(c2.out_channels) if i not in idx2]
-                block.pruned_filters_conv2=pruned_idx
-                block.bn2_biases={i:ddb2[i] for i in pruned_idx}
-
-                ddb1= torch.index_select(ddb1, dim = 0, index = idx2)
-                ddb2= torch.index_select(ddb2, dim = 0, index = idx2)
-                ddb3['running_mean']=torch.index_select(ddb3['running_mean'], dim = 0, index = idx2)
-                ddb3['running_var']=torch.index_select(ddb3['running_var'], dim = 0, index = idx2)
-                b2.weight = nn.Parameter(ddb1)
-                b2.bias = nn.Parameter(ddb2)
-                b2._buffers=ddb3
-                b2.num_features=b2.weight.shape[0]
-
-            c2.weight = nn.Parameter(d2)
-            c2.in_channels = c2.weight.shape[1]
-            c2.out_channels = c2.weight.shape[0]
-            
-
-            return idx
-
-def compress_bottleneck(block):
-    device='cpu'
-    if torch.cuda.is_available():
-        device= 'cuda:0'
-    if isinstance(block,resnetBig.Bottleneck) or isinstance(block,resnetBig_pruned.Bottleneck):
-        c1 = block._modules["conv1"]
-        c2 = block._modules["conv2"]
-        c3 = block._modules["conv3"]
-        b1= block._modules['bn1']
-        b2= block._modules['bn2']
-        b3= block._modules['bn3']
-
-        d1 = c1.weight.data
-        d2 = c2.weight.data
-        d3 = c3.weight.data
-
-        db1=b1.weight.data
-        db2=b1.bias.data
-        db3=b1._buffers
-
-        ddb1=b2.weight.data
-        ddb2=b2.bias.data
-        ddb3=b2._buffers
-
-        dddb1=b3.weight.data
-        dddb2=b3.bias.data
-        dddb3=b3._buffers
-  
-        idx = get_unpruned_filters(c1)
-       
-        idx2 = get_unpruned_filters(c2)
-
-        idx3 = get_unpruned_filters(c3)
-        
-
-        if len(idx) < c1.out_channels:
-            prune.remove(c1,"weight")
-            prune.remove(b1,"bias")
-            prune.remove(b1,"weight")
-
-        if len(idx) < c1.out_channels or len(idx2) < c2.out_channels:
-            prune.remove(c2,"weight")
-            prune.remove(b2,"weight")
-            prune.remove(b2,"bias")
-
-        if len(idx2) < c2.out_channels or ( isinstance(block,resnetBig_pruned.Bottleneck)  and len(idx3) < c3.out_channels):
-            prune.remove(c3,"weight")
-        
-        if isinstance(block,resnetBig_pruned.Bottleneck)  and len(idx3) < c3.out_channels:
-            prune.remove(b3,"weight")
-            prune.remove(b3,"bias")
-
-        # print(idx)
-        if len(idx) < c1.out_channels:
-            if len(idx) == 0:
-                idx = [0]
-                # print('All pruned', c1.in_channels*c1.kernel_size[0]*c1.kernel_size[1]+c2.out_channels*c2.kernel_size[0]*c2.kernel_size[1])
-            
-            idx = torch.Tensor(idx).type(torch.int).to(device)
-            d1 = torch.index_select(d1, dim = 0, index = idx)
-            c1.weight = nn.Parameter(d1)
-            c1.out_channels = c1.weight.shape[0]
-            
-           
-            db1= torch.index_select(db1, dim = 0, index = idx)
-            db2= torch.index_select(db2, dim = 0, index = idx)
-            db3['running_mean']=torch.index_select(db3['running_mean'], dim = 0, index = idx)
-            db3['running_var']=torch.index_select(db3['running_var'], dim = 0, index = idx)
-            b1.weight = nn.Parameter(db1)
-            b1.bias = nn.Parameter(db2)
-            b1._buffers=db3
-            b1.num_features=b1.weight.shape[0]
+# Remove masks and other params
+    for module in net.modules():
+        if isinstance(module,nn.Conv2d):
+            remove_additional_pars_conv(module)
+        elif isinstance(module,nn.BatchNorm2d):
+            remove_additional_pars_bn(module)
+    # breakpoint()
 
 
-            d2 = torch.index_select(d2, dim = 1, index = idx)
-            if len(idx2) == 0:
-                idx2 = [0]
-                # print('All pruned')
-            # breakpoint()
-            idx2 = torch.Tensor(idx2).type(torch.int).to(device)
-            d2 = torch.index_select(d2, dim = 0, index = idx2)
-            c2.weight = nn.Parameter(d2)
-            c2.in_channels = c2.weight.shape[1]
-            c2.out_channels = c2.weight.shape[0]
-
-            ddb1= torch.index_select(ddb1, dim = 0, index = idx2)
-            ddb2= torch.index_select(ddb2, dim = 0, index = idx2)
-            ddb3['running_mean']=torch.index_select(ddb3['running_mean'], dim = 0, index = idx2)
-            ddb3['running_var']=torch.index_select(ddb3['running_var'], dim = 0, index = idx2)
-            b2.weight = nn.Parameter(ddb1)
-            b2.bias = nn.Parameter(ddb2)
-            b2._buffers=ddb3
-            b2.num_features=b2.weight.shape[0]
-
-            
-
-            d3 = torch.index_select(d3, dim = 1, index = idx2)
-            if isinstance(block,resnetBig_pruned.Bottleneck) and len(idx3) < c3.out_channels:
-                if len(idx3) == 0:
-                    idx3 = [0]
-                    # print('All pruned')
-                # breakpoint()
-                idx3 = torch.Tensor(idx3).type(torch.int).to(device)
-                d3 = torch.index_select(d3, dim = 0, index = idx3)
-                pruned_idx=[i  for i in range(c3.out_channels) if i not in idx3]
-                block.pruned_filters_conv3=pruned_idx
-                block.bn3_biases={i:dddb2[i] for i in pruned_idx}
-
-                dddb1= torch.index_select(dddb1, dim = 0, index = idx3)
-                dddb2= torch.index_select(dddb2, dim = 0, index = idx3)
-                dddb3['running_mean']=torch.index_select(dddb3['running_mean'], dim = 0, index = idx3)
-                dddb3['running_var']=torch.index_select(dddb3['running_var'], dim = 0, index = idx3)
-                b3.weight = nn.Parameter(dddb1)
-                b3.bias = nn.Parameter(dddb2)
-                b3._buffers=dddb3
-                b3.num_features=b3.weight.shape[0]
-
-            c3.weight = nn.Parameter(d3)
-            c3.in_channels = c3.weight.shape[1]
-            c3.out_channels = c3.weight.shape[0]
-            
-
-            return idx
-
-
-def prune_block_channels(block):
-    if isinstance(block,resnet.BasicBlock):
-        c1 = block._modules["conv1"]
-        c2 = block._modules["conv2"]
-        idx = get_unpruned_filters(c1)
-        idx_c = [el for el in range(c2.in_channels)]
-        [idx_c.remove(el) for el in idx]
-        print(idx_c)
-        if len(idx) < c1.out_channels:
-            c2.weight_mask[:,idx_c,:,:] = 0
-
-             
-            
-def block_test():
-    device='cpu'
-    if torch.cuda.is_available():
-        device= 'cuda:0'
-
-    model=resnet.resnet20(10).to(device)
-    model.eval()
-    bb=model.layer1[0]
-    inp=torch.rand([2,16,2,2]).to(device)
-    out0=bb(inp)
+#Prune resnet20 starting froma checkpoint
+def unit_test_2010(name):
     
-    print('0pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
-    qp.prune_thr(bb,1.e-12)
-    outhalf=bb(inp)
-    print('1pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
-    bb.conv1.weight_mask[2]=0
-    print('2pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
-    out1=bb(inp)
-    out1_c1=bb.conv1(inp)
-    out1_b1=bb.bn1(out1_c1)
-    # print(' is zero? ', ou)
-    out1_rel=F.relu(out1_b1)
-    out1_c2=bb.conv2(out1_rel)
-    out1_b2=bb.bn2(out1_c2)
-    out1_temp= F.relu(bb.shortcut(inp)+out1_b2)
-    print('Diff sanity: ', torch.max(torch.abs(out1_temp-out1)).item())
-
-    idx=compress_block(bb)
-    #breakpoint()
-
-    out2=bb(inp)
-    out2_c1=bb.conv1(inp)
-    out2_b1=bb.bn1(out2_c1)
-    out2_rel=F.relu(out2_b1)
-    out2_c2=bb.conv2(out2_rel)
-    out2_b2=bb.bn2(out2_c2)
-    out2_temp= F.relu(bb.shortcut(inp)+out2_b2)
-    print('Diff sanity: ', torch.max(torch.abs(out2_temp-out2)).item())
-    print('2pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
-    print('Diff: ', torch.max(torch.abs(out1-out2)).item(),' with start ', torch.max(torch.abs(out1-out0)).item(),' with half ', torch.max(torch.abs(outhalf-out0)).item())
-    print('Diff c1: ', torch.max(torch.abs(torch.index_select(out1_c1, dim = 1, index = idx)-out2_c1)).item())
-    print('Diff b1: ', torch.max(torch.abs(torch.index_select(out1_b1, dim = 1, index = idx)-out2_b1)).item())
-    print('Diff rel: ', torch.max(torch.abs(torch.index_select(out1_rel, dim = 1, index = idx)-out2_rel)).item())
-    print('Diff c2: ', torch.max(torch.abs(out1_c2-out2_c2)).item())#torch.index_select(out1_c2, dim = 1, index = idx)
-    print('Diff b2: ', torch.max(torch.abs(out1_b2-out2_b2)).item())#torch.index_select(out1_b2, dim = 1, index = idx)
-
-
-def block_test_pruned():
-    device='cpu'
-    if torch.cuda.is_available():
-        device= 'cuda:0'
-    
-    model=resnet_pruned.resnet20(10).to(device)
-    model.eval()
-    bb=model.layer1[0]
-    inp=torch.rand([2,16,2,2]).to(device)
-    out0=bb(inp)
-    
-    print('0pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
-    qp.prune_thr(bb,1.e-12)
-    outhalf=bb(inp)
-    print('1pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
-    bb.conv1.weight_mask[2]=0
-    bb.conv2.weight_mask[:]=0
-    print('2pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
-    out1=bb(inp)
-    # out1_c1=bb.conv1(inp)
-    # out1_b1=bb.bn1(out1_c1)
-    # # print(' is zero? ', ou)
-    # out1_rel=F.relu(out1_b1)
-    # out1_c2=bb.conv2(out1_rel)
-    # out1_b2=bb.bn2(out1_c2)
-    # out1_temp= F.relu(bb.shortcut(inp)+out1_b2)
-    # print('Diff sanity: ', torch.max(torch.abs(out1_temp-out1)).item())
-
-    idx=compress_block(bb)
-    #breakpoint()
-
-    out2=bb(inp)
-    # out2_c1=bb.conv1(inp)
-    # out2_b1=bb.bn1(out2_c1)
-    # out2_rel=F.relu(out2_b1)
-    # out2_c2=bb.conv2(out2_rel)
-    # out2_b2=bb.bn2(out2_c2)
-    # out2_temp= F.relu(bb.shortcut(inp)+out2_b2)
-    # print('Diff sanity: ', torch.max(torch.abs(out2_temp-out2)).item())
-    print('2pars: ',par_count(bb),' pruned pars: ',pruned_par(bb))
-    print('Diff: ', torch.max(torch.abs(out1-out2)).item(),' with start ', torch.max(torch.abs(out1-out0)).item(),' with half ', torch.max(torch.abs(outhalf-out0)).item())
-    # print('Diff c1: ', torch.max(torch.abs(torch.index_select(out1_c1, dim = 1, index = idx)-out2_c1)).item())
-    # print('Diff b1: ', torch.max(torch.abs(torch.index_select(out1_b1, dim = 1, index = idx)-out2_b1)).item())
-    # print('Diff rel: ', torch.max(torch.abs(torch.index_select(out1_rel, dim = 1, index = idx)-out2_rel)).item())
-    # print('Diff c2: ', torch.max(torch.abs(out1_c2-out2_c2)).item())#torch.index_select(out1_c2, dim = 1, index = idx)
-    # print('Diff b2: ', torch.max(torch.abs(out1_b2-out2_b2)).item())#torch.index_select(out1_b2, dim = 1, index = idx)
-
-
-
-
-def go(name):
-    # name='/local1/caccmatt/Pruning_prj/saves/save_V0.0.2-_resnet20_Cifar10_lr0.1_l1.8_a0.001_e300+200_bs128_t0.0001_m0.9_wd0.0005_mlstemp3_Mscl1.0/checkpoint.th'
-
-    parser = argparse.ArgumentParser(description='evaluation of pruned net')
-    parser.add_argument('--name',
-                        help="Name of checkpoint")
-
-    args = parser.parse_args()
-    model = archs.load_arch("resnet20", 10).cuda()
+    name='saves/save_V1.1.0-_resnet20_Cifar10_lr0.1_l2.7_a0.0001_e300+200_bs128_t0.0001_tstr0.05_m0.9_wd0.0005_mlstemp3_Mscl1.0_structconvs_and_batchnorm/model_best_val.th'
     model_pruned=torch.nn.DataParallel(resnet_pruned.__dict__['resnet20'](10))
-    qp.prune_thr(model,1.e-12)
     qp.prune_thr(model_pruned,1.e-12)
-    
+
     # base_checkpoint=torch.load("saves/save_" + args.name +"/checkpoint.th")
     base_checkpoint=torch.load(name)
-
-    model.load_state_dict(base_checkpoint['state_dict'])
     model_pruned.load_state_dict(base_checkpoint['state_dict'])
-    # breakpoint()
-    model.eval()
+
     model_pruned.eval()
     model_pruned(torch.rand([1,3,32,32]))
     dataset = dl.load_dataset("Cifar10", 128)
@@ -540,48 +305,37 @@ def go(name):
     criterion = nn.CrossEntropyLoss().cuda()
 
 
-    optimizer = torch.optim.SGD(model.parameters(), 0.1,
-                                momentum=0.9,
-                                weight_decay=5.e-4)
+
     optimizer_pruned = torch.optim.SGD(model_pruned.parameters(), 0.1,
                                 momentum=0.9,
                                 weight_decay=5.e-4)
 
-    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer_pruned,
                                                         milestones=[300], last_epoch= - 1)
 
 
-    trainer = Trainer(model = model, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, 
-                                            criterion =criterion, optimizer = optimizer, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
-    trainer_pruned = Trainer(model = model_pruned, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, 
+    trainer_pruned = Trainer(model = model_pruned, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, threshold_str=1e-4,
                                             criterion =criterion, optimizer = optimizer_pruned, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
 
-    trainer.validate(reg_on = False)
-    # trainer_pruned.validate(reg_on = False)
-    _, sp_rate0 = at.sparsityRate(model)
-    pr_par0 = pruned_par(model)
-    tot0 = par_count(model)
+    trainer_pruned.validate(reg_on = False)
+
+
+ 
 
     _, sp_rate0_pr = at.sparsityRate(model_pruned)
     pr_par0_pr = pruned_par(model_pruned)
     tot0_pr = par_count(model_pruned)
 
-    for m in model.modules():
-        compress_block(m)
-        # prune_block_channels(m)
-    for m in model_pruned.modules():
-        compress_block(m)
+    compress_resnet(model_pruned)
 
     # breakpoint()
 
     #print(model)
-    #new_tot = par_count(model)
+    # new_tot = par_count(model)
     # trainer.validate(reg_on = False)
     trainer_pruned.validate(reg_on = False)
 
-    _, sp_rate1 = at.sparsityRate(model)
-    pr_par1 = pruned_par(model)
-    tot1 = par_count(model)
+
 
     _, sp_rate1_pr = at.sparsityRate(model_pruned)
     pr_par1_pr = pruned_par(model_pruned)
@@ -590,10 +344,10 @@ def go(name):
     #print("new_tot ", new_tot)
     # print("sparsity before and after ", sp_rate0, ' ', sp_rate1, ' pr ', sp_rate0_pr,' ', sp_rate1_pr )
     # print("pruned par before and after ", pr_par0, ' ', pr_par1, ' pr ', pr_par0_pr,' ', pr_par1_pr )
-    print('Old stats ', sp_rate0[1],' perc ', 100*sp_rate0[1]/tot0 )
-    print('New stats ', tot0-tot1_pr,' perc ', 100*(tot0-tot1_pr)/tot0 )
+
+    print('New stats ', tot0_pr-tot1_pr,' perc ', 100*(tot0_pr-tot1_pr)/tot0_pr )
     # print((b_new-b)/tot)
-    return model, model_pruned, dataset
+    return model_pruned, dataset
 
 def eval_again():
     name_list = os.listdir('saves')

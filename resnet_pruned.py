@@ -52,6 +52,7 @@ class LambdaLayer(nn.Module):
         return self.lambd(x)
 
 
+
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -71,8 +72,10 @@ class BasicBlock(nn.Module):
                 """
                 For CIFAR10 ResNet paper uses option A.
                 """
-                self.shortcut = LambdaLayer(lambda x:
-                                            F.pad(x[:, :, ::2, ::2], (0, 0, 0, 0, planes//4, planes//4), "constant", 0))
+                # self.shortcut = LambdaLayer(lambda x:
+                                            # F.pad(x[:, :, ::2, ::2], (0, 0, 0, 0, planes//4, planes//4), "constant", 0))
+                self.shortcut = LambdaLayer(lambda x: x[:, :, ::2, ::2])
+                self.pruned_shortcut = [i for i  in range(planes//4)]+ [i+3*(planes//4) for i  in range(planes//4)]
             elif option == 'B':
                 self.shortcut = nn.Sequential(
                      nn.Conv2d(in_planes, self.expansion * planes, kernel_size=1, stride=stride, bias=False),
@@ -90,26 +93,35 @@ class BasicBlock(nn.Module):
         return out
 
     def incompatible_sum(self,skip_x,out):
-        if self.pruned_filters_conv2!=[]:
-          
-            original_num_filters=len(self.pruned_filters_conv2)+len(self.conv2.size(0))
+        if self.pruned_filters_conv2!=[] or self.pruned_shortcut !=[]:
+            device='cpu'
+            if torch.cuda.is_available():
+                device= 'cuda:0'
+            # breakpoint()
+            original_num_filters=len(self.pruned_filters_conv2)+self.conv2.weight.size(0)
             combined_unpruned= [i for i in range(original_num_filters) if i not in self.pruned_filters_conv2 and i not in self.pruned_shortcut ]
             combined_pruned= [i for i in range(original_num_filters) if i in self.pruned_filters_conv2 and i in self.pruned_shortcut ]
             shortcut_only_unpruned= [i for i in range(original_num_filters) if i in self.pruned_filters_conv2 and i not in self.pruned_shortcut ]
             conv2_only_unpruned= [i for i in range(original_num_filters) if i not in self.pruned_filters_conv2 and i in self.pruned_shortcut ]
-
+            
             comb_unpr_conv2 = mask_idx_list(combined_unpruned,self.pruned_filters_conv2)
             comb_unpr_shortcut = mask_idx_list(combined_unpruned,self.pruned_shortcut)
 
             out_aux = out[:,comb_unpr_conv2,:]
-            skip_x_aux = out[:,comb_unpr_shortcut,:]
+            skip_x_aux = skip_x[:,comb_unpr_shortcut,:]
             out_aux += skip_x_aux
-
+            
             final_idxs_aux = mask_idx_list(combined_unpruned,combined_pruned)
-            final_idxs_skip_x = mask_idx_list(comb_unpr_shortcut,combined_pruned)
-            final_idxs_out = mask_idx_list(comb_unpr_conv2,combined_pruned)
+            final_idxs_skip_x = mask_idx_list(shortcut_only_unpruned,combined_pruned)
+            final_idxs_out = mask_idx_list(conv2_only_unpruned,combined_pruned)
 
-            t_aux=torch.zeros(out.shape+[0,original_num_filters-len(combined_pruned)-out.size(1),0,0])
+            shortcut_only_unpruned = mask_idx_list(shortcut_only_unpruned,self.pruned_shortcut)
+            conv2_only_unpruned = mask_idx_list(conv2_only_unpruned,self.pruned_filters_conv2)
+ 
+            # breakpoint()
+            final_shape= [out.size(0),original_num_filters-len(combined_pruned),out.size(2),out.size(3)]
+            t_aux=torch.zeros(final_shape).to(device)
+            
             t_aux[:,final_idxs_aux,:]=out_aux
             t_aux[:,final_idxs_out,:]=out[:,conv2_only_unpruned,:]
             t_aux[:,final_idxs_skip_x,:]=skip_x[:,shortcut_only_unpruned,:]
@@ -149,9 +161,58 @@ class ResNet(nn.Module):
         out = self.layer3(out)
         out = F.avg_pool2d(out, out.size()[3])
         out = out.view(out.size(0), -1)
+        
         out = self.linear(out)
         return out
 
+    def conv_batchnorm_blocks(self):
+        blocks_list=[]
+        blocks_list.append( {'conv':self.conv1,'batchnorm':self.bn1, 'id':0})
+        i=1
+        for b in self.modules():
+            if isinstance(b, BasicBlock):
+                blocks_list.append( {'conv':b.conv1,'batchnorm':b.bn1, 'id':i})
+                blocks_list.append( {'conv':b.conv2,'batchnorm':b.bn2, 'id':i+1})
+                i+=2
+                if isinstance(b.shortcut,nn.Sequential) and len(b.shortcut)>0 :
+                    blocks_list.append( {'conv':b.shortcut[0],'batchnorm':b.shortcut[1], 'id':i})
+                    i+=1
+        yield from blocks_list
+
+    def block_layer_sequence(self):
+       
+        
+        for  i in range(len(self.layer1)-1):
+                yield self.layer1[i], self.layer1[i+1].conv1
+        yield self.layer1[-1], self.layer2[0].conv1
+
+        
+        for  i in range(len(self.layer2)-1):
+                yield self.layer2[i], self.layer2[i+1].conv1
+        yield self.layer2[-1], self.layer3[0].conv1
+
+        
+        for  i in range(len(self.layer3)-1):
+                yield self.layer3[i], self.layer3[i+1].conv1
+        yield self.layer3[-1], self.linear
+
+
+
+    def blocks_sequence(self):
+       
+        for  i in range(len(self.layer1)-1):
+                yield self.layer1[i], self.layer1[i+1]
+        yield self.layer1[-1], self.layer2[0]
+
+        
+        for  i in range(len(self.layer2)-1):
+                yield self.layer2[i], self.layer2[i+1]
+        yield self.layer2[-1], self.layer3[0]
+
+        
+        for  i in range(len(self.layer3)-1):
+                yield self.layer3[i], self.layer3[i+1]
+        yield self.layer3[-1], self.linear
 
 def resnet20(num_classes):
     return ResNet(BasicBlock, [3, 3, 3], num_classes = num_classes)

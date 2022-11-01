@@ -203,20 +203,33 @@ def incompatible_sum(self,t1,t2,rm_idxs1,rm_idxs2):
 
         else: return out+t2
 
+# def mask_idx_list_to_original(idx_list,removed_idxs):
+#     # breakpoint()
+#     l=[]
+#     count=0
+#     removed_idxs.sort()
+
+#     for idx in idx_list:
+
+#         while count < len(removed_idxs) and removed_idxs[count]<=idx:
+#             count+=1
+           
+#         l.append(idx+count)
+
+#     return l
+
 def mask_idx_list(idx_list,removed_idxs):
-    
+    # breakpoint()
     l=[]
     count=0
-    removed_idx.sort()
+    removed_idxs.sort()
 
     for idx in idx_list:
 
-        while removed_idx[count]<=idx:
+        while count < len(removed_idxs) and removed_idxs[count]<idx:
             count+=1
            
-        l.append(idx+count)
+        l.append(idx-count)
 
     return l
-
-
 

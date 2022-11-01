@@ -30,7 +30,7 @@ class PerspReg:
         
         norminf=torch.norm(group,dim=1,p=np.inf)
         norm2= torch.norm(group,dim=1,p=2)
-        num_el_struct=group.size(0)
+        num_el_struct=group.size(1)
         
 
 
@@ -56,8 +56,8 @@ class PerspReg:
         tot=0
         for m in net.modules():
             if isinstance(m,torch.nn.Conv2d):
-                group = m.weight.permute([1,0,2,3])
-                reg+=self.compatible_group_computation(group.reshape(group.size(1),-1), self.M[m])
+                group = m.weight
+                reg+=self.compatible_group_computation(group.reshape(group.size(0),-1), self.M[m])
                 tot+=group.numel()
 
         return reg/tot
@@ -71,8 +71,8 @@ class PerspReg:
         for block in net.conv_batchnorm_blocks():
             conv = block['conv']
             bnorm = block['batchnorm']
-            conv_w = conv.weight.permute([1,0,2,3])
-            conv_w=conv_w.reshape(conv_w.size(1),-1)
+            conv_w = conv.weight
+            conv_w=conv_w.reshape(conv_w.size(0),-1)
             group = torch.cat((conv_w,bnorm.weight.unsqueeze(1),bnorm.bias.unsqueeze(1)),dim=1)
             reg+=self.compatible_group_computation(group,self.M[block['id']])
             tot+=group.numel()

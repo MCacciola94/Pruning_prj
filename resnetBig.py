@@ -202,6 +202,51 @@ class ResNet(nn.Module):
 
         return out
 
+    def conv_batchnorm_blocks(self):
+        blocks_list=[]
+        blocks_list.append( {'conv':self.conv1,'batchnorm':self.bn1, 'id':0})
+        i=1
+        for b in self.modules():
+            if isinstance(b, BasicBlock):
+                blocks_list.append( {'conv':b.conv1,'batchnorm':b.bn1, 'id':i})
+                blocks_list.append( {'conv':b.conv2,'batchnorm':b.bn2, 'id':i+1})
+                i+=2
+                if isinstance(b.shortcut,nn.Sequential) and len(b.shortcut)>0 :
+                    blocks_list.append( {'conv':b.shortcut[0],'batchnorm':b.shortcut[1], 'id':i})
+                    i+=1
+
+            if isinstance(b, Bottleneck):
+                blocks_list.append( {'conv':b.conv1,'batchnorm':b.bn1, 'id':i})
+                blocks_list.append( {'conv':b.conv2,'batchnorm':b.bn2, 'id':i+1})
+                blocks_list.append( {'conv':b.conv3,'batchnorm':b.bn1, 'id':i+2})
+                i+=3
+                if isinstance(b.shortcut,nn.Sequential) and len(b.shortcut)>0 :
+                    blocks_list.append( {'conv':b.shortcut[0],'batchnorm':b.shortcut[1], 'id':i})
+                    i+=1
+
+        yield from blocks_list
+
+    def block_layer_sequence(self):
+       
+        for  i in range(len(self.layer1)-1):
+                yield self.layer1[i], self.layer1[i+1].conv1
+        yield self.layer1[-1], self.layer2[0].conv1
+
+
+        for  i in range(len(self.layer2)-1):
+                yield self.layer2[i], self.layer2[i+1].conv1
+        yield self.layer2[-1], self.layer3[0].conv1
+
+  
+        for  i in range(len(self.layer3)-1):
+                yield self.layer3[i], self.layer3[i+1].conv1
+        yield self.layer3[-1], self.layer4[0].conv1
+
+ 
+        for  i in range(len(self.layer4)-1):
+                yield self.layer4[i], self.layer4[i+1].conv1
+        yield self.layer4[-1], self.linear
+
 
 def resnet18(num_classes=10):
 
