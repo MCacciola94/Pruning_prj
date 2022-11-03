@@ -35,14 +35,14 @@ class PerspReg:
 
 
         bo1 = torch.max(norminf/M,const*norm2)>=1
-        reg1 = norm2**2+1-alpha
+        reg1 = alpha*norm2**2+1-alpha
 
         bo2 = norminf/M<=const*norm2
-        reg2=const*norm2*(1+alpha)
+        reg2=2*(alpha*(1-alpha))**0.5*norm2
 
         eps=(torch.zeros(norminf.size())).cuda()
         eps=eps+1e-10
-        reg3=norm2**2/(torch.max(eps,norminf))*M+(1-alpha)*norminf/M
+        reg3=alpha* norm2**2/(torch.max(eps,norminf))*M+(1-alpha)*norminf/M
 
         bo2=torch.logical_and(bo2, torch.logical_not(bo1))
         bo3=torch.logical_and(torch.logical_not(bo2), torch.logical_not(bo1))

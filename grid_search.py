@@ -69,6 +69,7 @@ class Grid_Search():
         M_scale = conf1.getfloat("M_scale", 1.0)
         structs = conf1.get("structs", 'convs_and_batchnorm')
         base_name = conf1.get("base_name")
+        reg_type = conf1.get("reg_type", 'perspReg')
         ##############################################################
 
         ################################################################
@@ -79,7 +80,7 @@ class Grid_Search():
             for lamb in LAMBS:
                 for alpha in ALPHAS:
 
-                    name = (base_name + "_" + arch + "_" + dset + "_lr" + str(lr) + "_l" + str(lamb) + "_a" + 
+                    name = (base_name + "_" +(reg_type if reg_type!='perspReg')+ arch + "_" + dset + "_lr" + str(lr) + "_l" + str(lamb) + "_a" + 
                             str(alpha) + "_e" + str(epochs) + "+" + str(finetuning_epochs) + "_bs" + str(batch_size) +
                             "_t" + str(threshold)+ "_tstr" + str(threshold_str) + "_m" + str(momentum) + "_wd" + str(weight_decay) + "_mlst" + milestones + "_Mscl" + str(M_scale)+ "_struct" + structs+'_id'+str(int(time())))
 
@@ -145,7 +146,7 @@ class Grid_Search():
 
                     #creating the actual pruned model
 
-                    model_pruned=torch.nn.DataParallel(resnet_pruned.__dict__[arch](10))
+                    model_pruned=torch.nn.DataParallel(resnet_pruned.__dict__[arch](num_classes))
                     qp.prune_thr(model_pruned,1.e-12)
                     base_checkpoint=torch.load(save_dir+'/model_best_val.th')
                     model_pruned.load_state_dict(base_checkpoint['state_dict'])

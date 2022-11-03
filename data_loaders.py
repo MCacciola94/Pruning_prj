@@ -88,8 +88,16 @@ def cifar100_loader(batch_size):
         ])),
         batch_size = 128, shuffle = False,
         num_workers = 4, pin_memory = True)
+    
+    stable_train_loader = torch.utils.data.DataLoader(
+        datasets.CIFAR100(root='./data', train = True, transform = transforms.Compose([
+            transforms.ToTensor(),
+            normalize,
+        ])),
+        batch_size = 128, shuffle = False,
+        num_workers = 4, pin_memory = True)
         
-    return {"train_loader": train_loader, "valid_loader": val_loader}
+    return {"train_loader": train_loader, "valid_loader": val_loader, "stable_train_loader": stable_train_loader}
 
 
 
@@ -129,4 +137,14 @@ def imagenet_loader(batch_size, data_path):
         batch_size = 128, shuffle = False,
         num_workers = 4, pin_memory = True)
 
-    return {"train_loader": train_loader, "valid_loader": val_loader}
+    stable_train_loader = torch.utils.data.DataLoader(
+        datasets.ImageFolder(traindir, transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            normalize,
+        ])),
+        batch_size = 128, shuffle = False,
+        num_workers = 4, pin_memory = True)
+
+    return {"train_loader": train_loader, "valid_loader": val_loader, "stable_train_loader": stable_train_loader}
