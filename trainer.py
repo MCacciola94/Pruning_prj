@@ -395,8 +395,8 @@ class Trainer():
                 b=thr
                 self.model.load_state_dict(original_state)
                 self.model(torch.rand([1,3,32,32]))
-                # print('resuming')
-                # self.validate(reg_on=False)
+                print('resuming')
+                self.validate(reg_on=False)
 
         self.model.load_state_dict(original_state)
         self.model(torch.rand([1,3,32,32]))

@@ -13,6 +13,7 @@ from torch.nn.utils import prune
 #My pkgs
 import aux_tools as at
 import perspReg as pReg
+import otherReg as oReg
 import architectures as archs
 import data_loaders as dl
 from trainer import Trainer
@@ -80,7 +81,7 @@ class Grid_Search():
             for lamb in LAMBS:
                 for alpha in ALPHAS:
 
-                    name = (base_name + "_" +(reg_type if reg_type!='perspReg')+ arch + "_" + dset + "_lr" + str(lr) + "_l" + str(lamb) + "_a" + 
+                    name = (base_name + "_" +((reg_type + '_') if reg_type!='perspReg' else'')+ arch + "_" + dset + "_lr" + str(lr) + "_l" + str(lamb) + "_a" + 
                             str(alpha) + "_e" + str(epochs) + "+" + str(finetuning_epochs) + "_bs" + str(batch_size) +
                             "_t" + str(threshold)+ "_tstr" + str(threshold_str) + "_m" + str(momentum) + "_wd" + str(weight_decay) + "_mlst" + milestones + "_Mscl" + str(M_scale)+ "_struct" + structs+'_id'+str(int(time())))
 
@@ -111,7 +112,7 @@ class Grid_Search():
 
                     if lamb == 0.0 and alpha == 0.0:
                         reg = at.noReg
-                    else:
+                    elif reg_type == 'perspReg':
                         #Creating the perspective regualriation function
                         #Compute M values for each layer using a trained model 
                         torch.save(model.state_dict(),name + "rand_init.ph")
@@ -128,6 +129,7 @@ class Grid_Search():
                         print("M values:\n",M)
                         
                         reg = pReg.PerspReg(alpha=alpha,M=M, option =structs)
+                    else: reg = oReg.__dict__[reg_type](option=structs)
 
 
 

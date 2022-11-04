@@ -59,13 +59,17 @@ def par_count_all(model):
 
 
 #compare two model printing different params
-def find_diff_params(model1,model2):
+def find_diff_params(model1,model2, equal_vals= False):
     params1=model1.state_dict()
     params2=model2.state_dict()
-
+    
     for par in params1.keys():
         if hasattr(par,'requires_grad') and par.requires_grad and par not in params2.keys():
             print('not in mod2 ', par)
+        elif equal_vals and torch.is_tensor(params1[par]):
+            if torch.norm(params1[par].to(torch.float)-params2[par].to(torch.float))!=0:
+                print('different vals', par)
+
 
     for par in params2.keys():
         if hasattr(par,'requires_grad') and par.requires_grad and par not in params1.keys():
