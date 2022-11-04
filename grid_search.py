@@ -71,6 +71,7 @@ class Grid_Search():
         structs = conf1.get("structs", 'convs_and_batchnorm')
         base_name = conf1.get("base_name")
         reg_type = conf1.get("reg_type", 'perspReg')
+        track_stats= conf1.get("track_stats", False)
         ##############################################################
 
         ################################################################
@@ -128,8 +129,8 @@ class Grid_Search():
 
                         print("M values:\n",M)
                         
-                        reg = pReg.PerspReg(alpha=alpha,M=M, option =structs)
-                    else: reg = oReg.__dict__[reg_type](option=structs)
+                        reg = pReg.PerspReg(alpha=alpha,M=M, option =structs, track_stats=track_stats)
+                    else: reg = oReg.__dict__[reg_type](alpha, option=structs)
 
 
 
@@ -165,6 +166,9 @@ class Grid_Search():
                     trainer_pr.validate(reg_on = False)
                     
                     print(' Real pruned parameter ',en.par_count(model)-en.par_count(model_pruned))
+                    if track_stats:
+                        print(' Reg cases stats ', reg.stats)
+                    
                     log_file.close()
                     
                     

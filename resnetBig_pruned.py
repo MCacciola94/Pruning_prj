@@ -16,7 +16,7 @@ Reference:
 import torch
 import numpy as np
 import torch.nn as nn
-
+from aux_tools import mask_idx_list
 import torch.nn.functional as F
 
 
@@ -65,37 +65,58 @@ class BasicBlock(nn.Module):
         out = self.bn2(self.conv2(out))
 
         skip_x = self.shortcut(x)
-        if self.pruned_filters_conv2!=[]:
-            # breakpoint()
-            not_pruned_comp=[]
-            ind_old=-1
-            for ind in self.pruned_filters_conv2:
-                not_pruned_comp+=[skip_x[:,ind_old+1:ind,:,:]]
-                ind_old=ind
-            not_pruned_comp+=[skip_x[:,ind_old+1:,:,:]]
-            # breakpoint()
-            skip_x_aux=torch.cat(not_pruned_comp,dim=1)
-            # if out.shape!=skip_x_aux.shape:
-            #     breakpoint()
-            out+=skip_x_aux
 
-            pruned_comp=[]
-            ind_old=0
-            for i,ind in enumerate(self.pruned_filters_conv2):
-                pruned_comp+=[out[:,ind_old:ind-i,:,:]]
-                pruned_comp+=[(skip_x[:,ind,:,:]+self.bn2_biases[ind]).unsqueeze(1)]
-                ind_old=ind-i
-            pruned_comp+=[out[:,ind_old:,:,:]]
-            out=torch.cat(pruned_comp,dim=1)
-            # if out.shape!=skip_x.shape:
-            #     breakpoint()
-        else: out+=skip_x
+        out=self.incompatible_sum(skip_x,out)
 
         out = F.relu(out)
 
         return out
 
+    def incompatible_sum(self,skip_x,out):
+        if self.pruned_filters_conv2!=[] or self.pruned_shortcut !=[]:
+            device='cpu'
+            if torch.cuda.is_available():
+                device= 'cuda:0'
+            # breakpoint()
+            original_num_filters=len(self.pruned_filters_conv2)+self.conv2.weight.size(0)
+            combined_unpruned= [i for i in range(original_num_filters) if i not in self.pruned_filters_conv2 and i not in self.pruned_shortcut ]
+            combined_pruned= [i for i in range(original_num_filters) if i in self.pruned_filters_conv2 and i in self.pruned_shortcut ]
+            shortcut_only_unpruned= [i for i in range(original_num_filters) if i in self.pruned_filters_conv2 and i not in self.pruned_shortcut ]
+            conv2_only_unpruned= [i for i in range(original_num_filters) if i not in self.pruned_filters_conv2 and i in self.pruned_shortcut ]
+            
+            if combined_unpruned !=[]:
+                comb_unpr_conv2 = mask_idx_list(combined_unpruned,self.pruned_filters_conv2)
+                comb_unpr_shortcut = mask_idx_list(combined_unpruned,self.pruned_shortcut)
 
+                out_aux = out[:,comb_unpr_conv2,:]
+                skip_x_aux = skip_x[:,comb_unpr_shortcut,:]
+                out_aux += skip_x_aux
+            
+                final_idxs_aux = mask_idx_list(combined_unpruned,combined_pruned)
+
+            if shortcut_only_unpruned !=[]:
+                final_idxs_skip_x = mask_idx_list(shortcut_only_unpruned,combined_pruned)
+                shortcut_only_unpruned = mask_idx_list(shortcut_only_unpruned,self.pruned_shortcut)
+
+            if conv2_only_unpruned !=[]:
+                final_idxs_out = mask_idx_list(conv2_only_unpruned,combined_pruned)
+                conv2_only_unpruned = mask_idx_list(conv2_only_unpruned,self.pruned_filters_conv2)
+
+            final_shape= [out.size(0),original_num_filters-len(combined_pruned),out.size(2),out.size(3)]
+            t_aux=torch.zeros(final_shape).to(device)
+            
+            if combined_unpruned !=[]:
+                t_aux[:,final_idxs_aux,:]=out_aux
+
+            if conv2_only_unpruned !=[]:
+                t_aux[:,final_idxs_out,:]=out[:,conv2_only_unpruned,:]
+
+            if shortcut_only_unpruned !=[]:
+                t_aux[:,final_idxs_skip_x,:]=skip_x[:,shortcut_only_unpruned,:]
+
+            return t_aux
+
+        else: return out+skip_x
 
 
 
@@ -129,6 +150,7 @@ class Bottleneck(nn.Module):
         self.shortcut = nn.Sequential()
 
         if stride != 1 or in_planes != self.expansion*planes:
+            
 
             self.shortcut = nn.Sequential(
 
@@ -139,7 +161,7 @@ class Bottleneck(nn.Module):
             )
 
     def forward(self, x):
-
+        
         out = F.relu(self.bn1(self.conv1(x)))
 
         out = F.relu(self.bn2(self.conv2(out)))
@@ -147,12 +169,60 @@ class Bottleneck(nn.Module):
         out = self.bn3(self.conv3(out))
 
         skip_x = self.shortcut(x)
-        out= incompatible_sum(out,skip_x,self.pruned_filters_conv3,self.pruned_shortcut)
+
+        out= self.incompatible_sum(skip_x,out)
+
         out = F.relu(out)
 
         return out
 
+    def incompatible_sum(self,skip_x,out):
+        if self.pruned_filters_conv3!=[] or self.pruned_shortcut !=[]:
+            
+            device='cpu'
+            if torch.cuda.is_available():
+                device= 'cuda:0'
+            # breakpoint()
+            original_num_filters=len(self.pruned_filters_conv3)+self.conv3.weight.size(0)
+            combined_unpruned= [i for i in range(original_num_filters) if i not in self.pruned_filters_conv3 and i not in self.pruned_shortcut ]
+            combined_pruned= [i for i in range(original_num_filters) if i in self.pruned_filters_conv3 and i in self.pruned_shortcut ]
+            shortcut_only_unpruned= [i for i in range(original_num_filters) if i in self.pruned_filters_conv3 and i not in self.pruned_shortcut ]
+            conv3_only_unpruned= [i for i in range(original_num_filters) if i not in self.pruned_filters_conv3 and i in self.pruned_shortcut ]
+            
+            if combined_unpruned !=[]:
+                comb_unpr_conv3 = mask_idx_list(combined_unpruned,self.pruned_filters_conv3)
+                comb_unpr_shortcut = mask_idx_list(combined_unpruned,self.pruned_shortcut)
 
+                out_aux = out[:,comb_unpr_conv3,:]
+                skip_x_aux = skip_x[:,comb_unpr_shortcut,:]
+                out_aux += skip_x_aux
+            
+                final_idxs_aux = mask_idx_list(combined_unpruned,combined_pruned)
+
+            if shortcut_only_unpruned !=[]:
+                final_idxs_skip_x = mask_idx_list(shortcut_only_unpruned,combined_pruned)
+                shortcut_only_unpruned = mask_idx_list(shortcut_only_unpruned,self.pruned_shortcut)
+
+            if conv3_only_unpruned !=[]:
+                final_idxs_out = mask_idx_list(conv3_only_unpruned,combined_pruned)
+                conv3_only_unpruned = mask_idx_list(conv3_only_unpruned,self.pruned_filters_conv3)
+
+            # breakpoint()
+            final_shape= [out.size(0),original_num_filters-len(combined_pruned),out.size(2),out.size(3)]
+            t_aux=torch.zeros(final_shape).to(device)
+            
+            if combined_unpruned !=[]:
+                t_aux[:,final_idxs_aux,:]=out_aux
+
+            if conv3_only_unpruned !=[]:
+                t_aux[:,final_idxs_out,:]=out[:,conv3_only_unpruned,:]
+
+            if shortcut_only_unpruned !=[]:
+                t_aux[:,final_idxs_skip_x,:]=skip_x[:,shortcut_only_unpruned,:]
+
+            return t_aux
+
+        else: return out+skip_x
 
 
 
@@ -276,6 +346,26 @@ class ResNet(nn.Module):
 
         for  i in range(len(self.layer4)-1):
                 yield self.layer4[i], self.layer4[i+1].conv1
+        yield self.layer4[-1], self.linear
+
+    def blocks_sequence(self):
+       
+        for  i in range(len(self.layer1)-1):
+                yield self.layer1[i], self.layer1[i+1]
+        yield self.layer1[-1], self.layer2[0]
+
+        
+        for  i in range(len(self.layer2)-1):
+                yield self.layer2[i], self.layer2[i+1]
+        yield self.layer2[-1], self.layer3[0]
+
+        for  i in range(len(self.layer3)-1):
+                yield self.layer3[i], self.layer3[i+1]
+        yield self.layer3[-1], self.layer4[0]
+
+        
+        for  i in range(len(self.layer4)-1):
+                yield self.layer4[i], self.layer4[i+1]
         yield self.layer4[-1], self.linear
 
 def resnet18(num_classes=10):

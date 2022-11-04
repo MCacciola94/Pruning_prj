@@ -218,7 +218,7 @@ class ResNet(nn.Module):
             if isinstance(b, Bottleneck):
                 blocks_list.append( {'conv':b.conv1,'batchnorm':b.bn1, 'id':i})
                 blocks_list.append( {'conv':b.conv2,'batchnorm':b.bn2, 'id':i+1})
-                blocks_list.append( {'conv':b.conv3,'batchnorm':b.bn1, 'id':i+2})
+                blocks_list.append( {'conv':b.conv3,'batchnorm':b.bn3, 'id':i+2})
                 i+=3
                 if isinstance(b.shortcut,nn.Sequential) and len(b.shortcut)>0 :
                     blocks_list.append( {'conv':b.shortcut[0],'batchnorm':b.shortcut[1], 'id':i})

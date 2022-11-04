@@ -7,11 +7,13 @@ import numpy as np
 
 
 class l1l2reg: 
-    def __init__(self,scaled=True, option= 'convs_and_batchnorm'):
+    def __init__(self,alpha,scaled=True, option= 'convs_and_batchnorm'):
         self.scaled=scaled
         self.option=option
+        self.alpha=alpha
     #Computation of the current factor
     def __call__(self,net, lamb = 0.1):
+        
 
         if self.option=='single_convs':
             reg= self.single_convs(net)
@@ -22,13 +24,13 @@ class l1l2reg:
         return lamb* reg
 
     def compatible_group_computation(self,group):
-
+        alpha= self.alpha
         norm2= torch.norm(group,dim=1,p=2)
         if self.scaled:
             num_el_struct=group.size(1)
         else: num_el_struct =1
 
-        reg=norm2.sum()*num_el_struct
+        reg=(alpha * (norm2**2).sum() + ((1-alpha) * norm2).sum() )*num_el_struct
                         
         return reg
 

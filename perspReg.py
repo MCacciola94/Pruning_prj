@@ -7,11 +7,13 @@ import numpy as np
 
 
 class PerspReg: 
-    def __init__(self,alpha,M, option= 'convs_and_batchnorm'):
+    def __init__(self,alpha,M, option= 'convs_and_batchnorm', track_stats = False):
         self.alpha=alpha
         self.M=M
         self.const=(torch.sqrt(torch.Tensor([alpha/(1-alpha)]))).cuda()
         self.option=option
+        self.track_stats=track_stats
+        self.stats={'case1':0,'case2':0,'case3':0}
     #Computation of the current factor
     def __call__(self,net, lamb = 0.1):
 
@@ -24,7 +26,6 @@ class PerspReg:
         return lamb* reg
 
     def compatible_group_computation(self,group, M):
-        reg = 0 
         alpha=self.alpha
         const=self.const
         
@@ -47,7 +48,11 @@ class PerspReg:
         bo2=torch.logical_and(bo2, torch.logical_not(bo1))
         bo3=torch.logical_and(torch.logical_not(bo2), torch.logical_not(bo1))
 
-        reg+=(bo1*reg1+bo2*reg2+bo3*reg3).sum()*num_el_struct
+        reg=(bo1*reg1+bo2*reg2+bo3*reg3).sum()*num_el_struct
+        if self.track_stats:
+            self.stats['case1']+=bo1.sum().item()
+            self.stats['case2']+=bo2.sum().item()
+            self.stats['case3']+=bo3.sum().item()
                         
         return reg
 
