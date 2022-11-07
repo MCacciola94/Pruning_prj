@@ -317,6 +317,9 @@ class Trainer():
         
     def binary_thr_search(self,iters):
         print('UNSTRUCT THRESHOLDING')
+        device='cpu'
+        if torch.cuda.is_available():
+            device= 'cuda:0'
 
         a=0
         b=1e-1
@@ -346,12 +349,12 @@ class Trainer():
             else :
                 b=thr
                 self.model.load_state_dict(original_state)
-                self.model(torch.rand([1,3,32,32]))
+                self.model(torch.rand([1,3,32,32]).to(device))
                 # print('resuming')
                 # self.validate(reg_on=False)
 
         self.model.load_state_dict(original_state)
-        self.model(torch.rand([1,3,32,32]))
+        self.model(torch.rand([1,3,32,32]).to(device))
 
         qp.prune_thr(self.model,last_feas_thr)
         print('Final unstruct threshold ', last_feas_thr)
@@ -362,6 +365,9 @@ class Trainer():
 
         
     def binary_thr_struct_search(self,iters):
+        device='cpu'
+        if torch.cuda.is_available():
+            device= 'cuda:0'
         print('STRUCT THRESHOLDING')
 
         a=0
@@ -394,12 +400,12 @@ class Trainer():
             else:
                 b=thr
                 self.model.load_state_dict(original_state)
-                self.model(torch.rand([1,3,32,32]))
+                self.model(torch.rand([1,3,32,32]).to(device))
                 print('resuming')
                 self.validate(reg_on=False)
 
         self.model.load_state_dict(original_state)
-        self.model(torch.rand([1,3,32,32]))
+        self.model(torch.rand([1,3,32,32]).to(device))
 
         qp.prune_struct(self.model,last_feas_thr)
         print('Final struct threshold ', last_feas_thr)

@@ -130,7 +130,7 @@ class Grid_Search():
                         print("M values:\n",M)
                         
                         reg = pReg.PerspReg(alpha=alpha,M=M, option =structs, track_stats=track_stats)
-                    else: reg = oReg.__dict__[reg_type](alpha, option=structs)
+                    else: reg = oReg.__dict__[reg_type](alpha, scaled=False,option=structs)
 
 
 

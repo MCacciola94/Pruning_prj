@@ -12,6 +12,9 @@ import resnet, resnet_pruned, resnetBig_pruned
 import torch.nn.utils.prune as prune
 import copy
 
+DEBUG =False
+eps_debug =1e-5
+out_old={}
 #compute number of zero in weight masks of convolutional layers
 def pruned_par(model):
     
@@ -112,14 +115,26 @@ def remove_additional_pars_bn(bn):
     # bn._buffers=buffers_bkp
     
 # compress a conv layer selecting the desired output filters
-def compress_conv_filters(conv, idx_not_pr):
+def compress_conv_filters(conv, idx_not_pr, debug =DEBUG):
+    if DEBUG:
+        if conv not in out_old.keys():
+            dims= conv.weight.shape
+            ones =torch.ones(dims[1:])
+            out_old[conv]=conv(ones.cuda())
+
     weight = conv.weight.data
     weight = torch.index_select(weight, dim = 0, index = idx_not_pr)
     conv.weight = nn.Parameter(weight)
     conv.out_channels = conv.weight.shape[0]
 
 # compress a conv layer selecting the desired input channels
-def compress_conv_channels(conv, idx_not_pr):    
+def compress_conv_channels(conv, idx_not_pr):
+    if DEBUG:
+        if conv not in out_old.keys():
+            dims= conv.weight.shape
+            ones =torch.ones(dims[1:])
+            out_old[conv]=conv(ones.cuda())
+
     weight = conv.weight.data
     weight = torch.index_select(weight, dim = 1, index = idx_not_pr)
     conv.weight = nn.Parameter(weight)
@@ -203,20 +218,22 @@ def compress_conv_bn_shortcut(conv1,bn,shortcut,pruned_shortcut,next_block):
       
     # Deal with shortcut1. There are 3 cases: Sequential but empty, Sequential with conv-bn and LambdaLayer
     if isinstance(shortcut,nn.Sequential) and len(shortcut)>0:
+        # breakpoint()
         
         conv_sc =shortcut[0]
         bn_sc =shortcut[1]
 
         idx_sc_not_pr = get_unpruned_filters(conv_sc)
 
-        if len(idx_sc_not_pr) < conv1.out_channels:
+        if len(idx_sc_not_pr) <original_out_channles:
             if len(idx_sc_not_pr) == 0:
                 idx_sc_not_pr = [0]
             idx_sc_not_pr = torch.Tensor(idx_sc_not_pr).type(torch.int).to(device)
             compress_conv_filters(conv_sc,idx_sc_not_pr)
             compress_batchnorm(bn_sc,idx_sc_not_pr)
 
-    else: idx_sc_not_pr = [i for i in range(original_out_channles) if i not in pruned_shortcut]      
+    else:
+        idx_sc_not_pr = [i for i in range(original_out_channles) if i not in pruned_shortcut]      
 
     # Adjust input of the following block. Again there are 3 cases for the shortcut (of next block this time)  
 
@@ -294,6 +311,19 @@ def compress_resnet(net):
         elif isinstance(module,nn.BatchNorm2d):
             remove_additional_pars_bn(module)
     # breakpoint()
+    if DEBUG:
+        for conv in out_old.keys():
+            dims= conv.weight.shape
+            ones =torch.ones(dims[1:])
+            out_new=conv(ones.cuda())
+            out_old_aux=out_old[conv]
+            breakpoint()
+            idx= torch.norm(out_old_aux,dim=[1,2],p=2)!=0
+            out_old_aux =out_old_aux[idx]
+            if torch.norm(out_old_aux-out_new,p=2)>eps_debug:
+                print('Not equivalent ',conv)
+
+
 
 
 #Prune resnet20 starting froma checkpoint
@@ -388,7 +418,7 @@ def eval_again():
 #Prune resnet20 starting froma checkpoint
 def unit_test_5010(name):
     
-    name='saves/save_V0.0.1-_resnet50_Cifar10_lr0.1_l2.8_a0.01_e300+200_bs128_t0.0001_m0.9_wd0.0005_mlstemp3_Mscl1.0/checkpoint.th'
+    # name='saves/save_V1.1.CP-_resnet50_Cifar10_lr0.1_l1.0_a0.1_e300+200_bs64_t0.05_tstr0.05_m0.9_wd0.0005_mlstemp3_Mscl1.0_structconvs_and_batchnorm_id1667581732/checkpoint.th'
     # model_pruned=torch.nn.DataParallel(resnetBig_pruned.__dict__['resnet50'](10))
     model_pruned= resnetBig_pruned.resnet50(10)
 
@@ -431,7 +461,7 @@ def unit_test_5010(name):
 
     trainer_pruned.validate(reg_on = False)
 
-    breakpoint()
+    # breakpoint()
     model_aux= copy.deepcopy(model_pruned)
  
 
@@ -479,3 +509,5 @@ def unit_test_5010(name):
 
 
     return model_pruned, dataset
+
+

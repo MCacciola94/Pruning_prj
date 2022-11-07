@@ -183,22 +183,32 @@ class ResNet(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x):
+        l=[]
 
         out = F.relu(self.bn1(self.conv1(x)))
 
         out = self.layer1(out)
+        l.append(out)
+
 
         out = self.layer2(out)
+        l.append(out)
+
 
         out = self.layer3(out)
+        l.append(out)
+
 
         out = self.layer4(out)
+        l.append(out)
+
 
         out = F.avg_pool2d(out, 4)
 
         out = out.view(out.size(0), -1)
 
         out = self.linear(out)
+        self.l=l
 
         return out
 
