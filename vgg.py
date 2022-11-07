@@ -64,3 +64,13 @@ class VGG(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.weight.data.normal_(0, 0.01)
                 m.bias.data.zero_()
+
+    def conv_batchnorm_blocks(self):
+        blocks_list=[]
+        i=0
+        for j in range(len(self.features)-1):
+            if isinstance(self.features[j], nn.Conv2d):
+                blocks_list.append( {'conv':self.features[j],'batchnorm':self.features[j+1], 'id':i})
+                i+=1
+
+        yield from blocks_list

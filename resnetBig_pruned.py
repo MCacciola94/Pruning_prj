@@ -32,7 +32,8 @@ class BasicBlock(nn.Module):
         super(BasicBlock, self).__init__()
 
         self.pruned_filters_conv2=[]
-        self.bn2_biases={}
+        self.pruned_shortcut=[]
+
 
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
 

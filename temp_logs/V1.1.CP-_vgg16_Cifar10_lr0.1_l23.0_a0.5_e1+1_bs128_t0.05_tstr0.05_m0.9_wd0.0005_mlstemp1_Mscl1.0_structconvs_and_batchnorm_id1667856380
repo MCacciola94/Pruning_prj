@@ -1,0 +1,127 @@
+V1.1.CP-_vgg16_Cifar10_lr0.1_l23.0_a0.5_e1+1_bs128_t0.05_tstr0.05_m0.9_wd0.0005_mlstemp1_Mscl1.0_structconvs_and_batchnorm_id1667856380
+Files already downloaded and verified
+M values:
+ {0: 0.6437135934829712, 1: 0.33195894956588745, 2: 0.28708043694496155, 3: 0.30836060643196106, 4: 0.2511841952800751, 5: 0.26209911704063416, 6: 0.19973431527614594, 7: 0.19076697528362274, 8: 0.16192905604839325, 9: 0.08138324320316315, 10: 0.0929206982254982, 11: 0.10246466845273972, 12: 0.5131387710571289}
+current lr 1.00000e-01
+Grad=  tensor(74.7760, device='cuda:0')
+Epoch: [0][0/391]	Time 1.985 (1.985)	Data 0.140 (0.140)	Loss 19.4218 (19.4218) ([2.296]+[17.125])	Prec@1 14.844 (14.844)
+Epoch: [0][100/391]	Time 0.024 (0.043)	Data 0.000 (0.001)	Loss 13.3387 (16.2299) ([1.978]+[11.361])	Prec@1 20.312 (18.696)
+Epoch: [0][200/391]	Time 0.024 (0.033)	Data 0.000 (0.001)	Loss 10.4156 (14.1809) ([1.929]+[8.487])	Prec@1 19.531 (19.799)
+Epoch: [0][300/391]	Time 0.023 (0.030)	Data 0.000 (0.001)	Loss 3.9531 (11.4233) ([1.920]+[2.033])	Prec@1 22.656 (20.821)
+Test: [49/79]	Time 0.008 (0.011)	Loss 3.0817 (3.0982) ([2.075]+[1.007])	Prec@1 19.531 (17.203)
+ * Prec@1 16.620
+
+ Elapsed time for training  0:00:12.236683
+Total parameter pruned without thresholding: 0.0 (unstructured) 0 (structured)
+UNSTRUCT THRESHOLDING
+original accuracy
+ * Prec@1 16.328
+ * Prec@1 16.328
+current threshold  0.05
+ * Prec@1 10.000
+current threshold  0.025
+ * Prec@1 10.000
+current threshold  0.0125
+ * Prec@1 11.080
+current threshold  0.00625
+ * Prec@1 12.312
+current threshold  0.003125
+ * Prec@1 15.416
+current threshold  0.0015625
+ * Prec@1 16.144
+current threshold  0.00078125
+ * Prec@1 16.290
+current threshold  0.0011718750000000002
+ * Prec@1 16.230
+current threshold  0.0009765625
+ * Prec@1 16.274
+current threshold  0.00087890625
+ * Prec@1 16.274
+Final unstruct threshold  0.00078125
+ * Prec@1 16.290
+
+ Total parameter pruned after unstruct thresholding: 13901233.987428658 (unstructured) 6960384 (structured)
+
+Test: [49/79]	Time 0.009 (0.012)	Loss 3.0764 (3.0928) ([2.076]+[1.000])	Prec@1 17.969 (17.094)
+ * Prec@1 16.570
+STRUCT THRESHOLDING
+original accuracy
+ * Prec@1 16.290
+ * Prec@1 16.290
+current threshold  0.05
+ * Prec@1 15.216
+resuming
+ * Prec@1 15.216
+current threshold  0.025
+ * Prec@1 15.216
+resuming
+ * Prec@1 15.216
+current threshold  0.0125
+ * Prec@1 15.216
+resuming
+ * Prec@1 15.216
+current threshold  0.00625
+ * Prec@1 15.216
+resuming
+ * Prec@1 15.216
+current threshold  0.003125
+ * Prec@1 15.216
+resuming
+ * Prec@1 15.216
+current threshold  0.0015625
+ * Prec@1 15.216
+resuming
+ * Prec@1 15.216
+current threshold  0.00078125
+ * Prec@1 15.216
+resuming
+ * Prec@1 15.216
+current threshold  0.000390625
+ * Prec@1 15.216
+resuming
+ * Prec@1 15.216
+current threshold  0.0001953125
+ * Prec@1 15.216
+resuming
+ * Prec@1 15.216
+current threshold  9.765625e-05
+ * Prec@1 15.216
+resuming
+ * Prec@1 15.216
+Final struct threshold  0
+ * Prec@1 15.216
+
+ Total parameter pruned after struct thresholding: 13901233.987428658 (unstructured) 6960384 (structured)
+
+Test: [49/79]	Time 0.009 (0.012)	Loss 2.7607 (2.7737) ([2.121]+[0.640])	Prec@1 17.188 (15.969)
+ * Prec@1 15.460
+
+ Total elapsed time  0:01:35.314599 
+ FINETUNING
+
+current lr 1.00000e-01
+Grad=  tensor(1.0099, device='cuda:0')
+Epoch: [1][0/391]	Time 0.162 (0.162)	Data 0.142 (0.142)	Loss 1.8332 (1.8332) ([1.833]+[0.000])	Prec@1 28.125 (28.125)
+Epoch: [1][100/391]	Time 0.011 (0.013)	Data 0.000 (0.001)	Loss 1.6893 (1.8217) ([1.689]+[0.000])	Prec@1 35.156 (27.413)
+Epoch: [1][200/391]	Time 0.012 (0.012)	Data 0.000 (0.001)	Loss 1.5975 (1.7841) ([1.597]+[0.000])	Prec@1 35.156 (29.357)
+Epoch: [1][300/391]	Time 0.011 (0.012)	Data 0.000 (0.001)	Loss 1.6429 (1.7402) ([1.643]+[0.000])	Prec@1 32.812 (30.876)
+Test: [49/79]	Time 0.003 (0.008)	Loss 2.5942 (2.6163) ([2.594]+[0.000])	Prec@1 25.781 (23.797)
+ * Prec@1 23.560
+
+ Elapsed time for training  0:01:40.710877
+Total parameter pruned: 13565952.0 (unstructured) 13565952 (structured)
+Test: [49/79]	Time 0.003 (0.008)	Loss 2.5942 (2.6163) ([2.594]+[0.000])	Prec@1 25.781 (23.797)
+ * Prec@1 23.560
+Best accuracy:  23.56
+Traceback (most recent call last):
+  File "/local1/caccmatt/Pruning_prj/grid_search.py", line 191, in <module>
+    main()
+  File "/local1/caccmatt/Pruning_prj/grid_search.py", line 188, in main
+    grid_search.run()
+  File "/local1/caccmatt/Pruning_prj/grid_search.py", line 164, in run
+    en.compress_resnet(model_pruned)
+  File "/local1/caccmatt/Pruning_prj/eval_net.py", line 328, in compress_resnet
+    original_num_filters= net.conv1.weight.size(0)
+  File "/home/x86_64-unknown-linux_ol8-gnu/anaconda-2022.10/envs/pytorch-1.12.1/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1207, in __getattr__
+    raise AttributeError("'{}' object has no attribute '{}'".format(
+AttributeError: 'VGG' object has no attribute 'conv1'

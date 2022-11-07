@@ -1,0 +1,150 @@
+V1.1.CP-_resnet18_Cifar10_lr0.1_l5.0_a0.5_e5+1_bs128_t0.05_tstr0.05_m0.9_wd0.0005_mlstemp1_Mscl1.0_structconvs_and_batchnorm_id1667855788
+Files already downloaded and verified
+M values:
+ {0: 0.5487061738967896, 1: 0.3523094356060028, 2: 0.3727952539920807, 3: 0.2562035620212555, 4: 0.4373529851436615, 5: 0.22009138762950897, 6: 0.244537815451622, 7: 0.2971794605255127, 8: 0.2007662057876587, 9: 0.20065100491046906, 10: 0.1917526125907898, 11: 0.21871764957904816, 12: 0.14210841059684753, 13: 0.19482767581939697, 14: 0.2532738447189331, 15: 0.13389164209365845, 16: 0.2179165631532669, 17: 0.09909647703170776, 18: 0.17826351523399353, 19: 0.4969000816345215}
+current lr 1.00000e-01
+Grad=  tensor(45.1869, device='cuda:0')
+Epoch: [0][0/391]	Time 1.958 (1.958)	Data 0.149 (0.149)	Loss 10.1793 (10.1793) ([4.587]+[5.593])	Prec@1 0.000 (0.000)
+Epoch: [0][100/391]	Time 0.035 (0.055)	Data 0.000 (0.002)	Loss 6.7120 (7.6308) ([2.016]+[4.696])	Prec@1 21.875 (18.093)
+Epoch: [0][200/391]	Time 0.035 (0.045)	Data 0.000 (0.001)	Loss 5.7971 (6.9222) ([1.827]+[3.970])	Prec@1 29.688 (23.430)
+Epoch: [0][300/391]	Time 0.035 (0.042)	Data 0.000 (0.001)	Loss 5.1420 (6.4360) ([1.727]+[3.415])	Prec@1 32.812 (27.025)
+Test: [49/79]	Time 0.013 (0.016)	Loss 4.5492 (4.5587) ([1.620]+[2.929])	Prec@1 46.875 (38.891)
+ * Prec@1 38.810
+current lr 1.00000e-01
+Grad=  tensor(1.0158, device='cuda:0')
+Epoch: [1][0/391]	Time 0.199 (0.199)	Data 0.152 (0.152)	Loss 4.5786 (4.5786) ([1.650]+[2.929])	Prec@1 37.500 (37.500)
+Epoch: [1][100/391]	Time 0.037 (0.037)	Data 0.000 (0.002)	Loss 3.9521 (4.3046) ([1.396]+[2.556])	Prec@1 53.125 (41.677)
+Epoch: [1][200/391]	Time 0.037 (0.037)	Data 0.000 (0.001)	Loss 3.8197 (4.1257) ([1.496]+[2.324])	Prec@1 46.875 (42.852)
+Epoch: [1][300/391]	Time 0.037 (0.037)	Data 0.000 (0.001)	Loss 2.9200 (3.9176) ([1.276]+[1.644])	Prec@1 50.781 (44.248)
+Test: [49/79]	Time 0.013 (0.016)	Loss 2.6305 (2.7154) ([1.398]+[1.233])	Prec@1 46.875 (47.125)
+ * Prec@1 46.610
+current lr 1.00000e-01
+Grad=  tensor(0.8786, device='cuda:0')
+Epoch: [2][0/391]	Time 0.191 (0.191)	Data 0.147 (0.147)	Loss 2.5669 (2.5669) ([1.334]+[1.233])	Prec@1 54.688 (54.688)
+Epoch: [2][100/391]	Time 0.037 (0.039)	Data 0.000 (0.002)	Loss 2.2803 (2.4936) ([1.131]+[1.150])	Prec@1 64.844 (52.359)
+Epoch: [2][200/391]	Time 0.037 (0.038)	Data 0.000 (0.001)	Loss 2.3164 (2.4409) ([1.261]+[1.055])	Prec@1 51.562 (52.888)
+Epoch: [2][300/391]	Time 0.037 (0.038)	Data 0.000 (0.001)	Loss 1.9780 (2.3659) ([1.043]+[0.935])	Prec@1 64.062 (53.956)
+Test: [49/79]	Time 0.013 (0.016)	Loss 2.1614 (2.2879) ([1.293]+[0.869])	Prec@1 52.344 (51.141)
+ * Prec@1 51.200
+current lr 1.00000e-01
+Grad=  tensor(2.1239, device='cuda:0')
+Epoch: [3][0/391]	Time 0.200 (0.200)	Data 0.156 (0.156)	Loss 2.0646 (2.0646) ([1.196]+[0.869])	Prec@1 55.469 (55.469)
+Epoch: [3][100/391]	Time 0.037 (0.039)	Data 0.000 (0.002)	Loss 1.9511 (1.9204) ([1.187]+[0.764])	Prec@1 54.688 (60.868)
+Epoch: [3][200/391]	Time 0.037 (0.038)	Data 0.000 (0.001)	Loss 1.6437 (1.8446) ([1.048]+[0.596])	Prec@1 64.062 (60.883)
+Epoch: [3][300/391]	Time 0.038 (0.038)	Data 0.000 (0.001)	Loss 1.4276 (1.7586) ([0.899]+[0.529])	Prec@1 65.625 (61.706)
+Test: [49/79]	Time 0.013 (0.016)	Loss 1.4268 (1.5387) ([0.928]+[0.499])	Prec@1 64.844 (62.578)
+ * Prec@1 62.550
+current lr 1.00000e-01
+Grad=  tensor(1.3110, device='cuda:0')
+Epoch: [4][0/391]	Time 0.189 (0.189)	Data 0.145 (0.145)	Loss 1.3979 (1.3979) ([0.899]+[0.499])	Prec@1 71.094 (71.094)
+Epoch: [4][100/391]	Time 0.038 (0.039)	Data 0.000 (0.002)	Loss 1.4206 (1.3988) ([0.956]+[0.465])	Prec@1 67.188 (67.551)
+Epoch: [4][200/391]	Time 0.037 (0.038)	Data 0.000 (0.001)	Loss 1.2773 (1.3802) ([0.829]+[0.448])	Prec@1 68.750 (68.136)
+Epoch: [4][300/391]	Time 0.037 (0.038)	Data 0.000 (0.001)	Loss 1.1984 (1.3568) ([0.759]+[0.439])	Prec@1 73.438 (68.688)
+Test: [49/79]	Time 0.013 (0.016)	Loss 1.1722 (1.3183) ([0.739]+[0.433])	Prec@1 76.562 (68.984)
+ * Prec@1 68.990
+
+ Elapsed time for training  0:01:21.362917
+Total parameter pruned without thresholding: 0.0 (unstructured) 0 (structured)
+UNSTRUCT THRESHOLDING
+original accuracy
+ * Prec@1 70.618
+ * Prec@1 70.618
+current threshold  0.05
+ * Prec@1 10.000
+current threshold  0.025
+ * Prec@1 36.854
+current threshold  0.0125
+ * Prec@1 68.570
+current threshold  0.00625
+ * Prec@1 71.240
+current threshold  0.009375000000000001
+ * Prec@1 70.678
+current threshold  0.010937500000000001
+ * Prec@1 69.888
+current threshold  0.010156250000000002
+ * Prec@1 70.152
+current threshold  0.009765625000000002
+ * Prec@1 70.368
+current threshold  0.0095703125
+ * Prec@1 70.562
+current threshold  0.009472656250000001
+ * Prec@1 70.634
+Final unstruct threshold  0.009472656250000001
+ * Prec@1 70.634
+
+ Total parameter pruned after unstruct thresholding: 10597266.00970012 (unstructured) 9429120 (structured)
+
+Test: [49/79]	Time 0.013 (0.016)	Loss 1.1333 (1.2779) ([0.738]+[0.395])	Prec@1 73.438 (69.062)
+ * Prec@1 69.220
+STRUCT THRESHOLDING
+original accuracy
+ * Prec@1 70.634
+ * Prec@1 70.634
+current threshold  0.05
+ * Prec@1 69.610
+resuming
+ * Prec@1 69.610
+current threshold  0.025
+ * Prec@1 69.610
+resuming
+ * Prec@1 69.610
+current threshold  0.0125
+ * Prec@1 69.610
+resuming
+ * Prec@1 69.610
+current threshold  0.00625
+ * Prec@1 69.610
+resuming
+ * Prec@1 69.610
+current threshold  0.003125
+ * Prec@1 69.610
+resuming
+ * Prec@1 69.610
+current threshold  0.0015625
+ * Prec@1 69.610
+resuming
+ * Prec@1 69.610
+current threshold  0.00078125
+ * Prec@1 69.610
+resuming
+ * Prec@1 69.610
+current threshold  0.000390625
+ * Prec@1 69.610
+resuming
+ * Prec@1 69.610
+current threshold  0.0001953125
+ * Prec@1 69.610
+resuming
+ * Prec@1 69.610
+current threshold  9.765625e-05
+ * Prec@1 69.610
+resuming
+ * Prec@1 69.610
+Final struct threshold  0
+ * Prec@1 69.610
+
+ Total parameter pruned after struct thresholding: 10597266.00970012 (unstructured) 9429120 (structured)
+
+Test: [49/79]	Time 0.014 (0.018)	Loss 1.1621 (1.2789) ([0.798]+[0.364])	Prec@1 75.781 (68.094)
+ * Prec@1 68.120
+
+ Total elapsed time  0:02:51.505102 
+ FINETUNING
+
+current lr 1.00000e-01
+Grad=  tensor(1.1134, device='cuda:0')
+Epoch: [5][0/391]	Time 0.240 (0.240)	Data 0.204 (0.204)	Loss 0.8153 (0.8153) ([0.815]+[0.000])	Prec@1 71.094 (71.094)
+Epoch: [5][100/391]	Time 0.017 (0.019)	Data 0.000 (0.002)	Loss 0.6187 (0.7934) ([0.619]+[0.000])	Prec@1 75.781 (71.968)
+Epoch: [5][200/391]	Time 0.017 (0.018)	Data 0.000 (0.001)	Loss 0.8743 (0.7786) ([0.874]+[0.000])	Prec@1 71.094 (72.808)
+Epoch: [5][300/391]	Time 0.017 (0.018)	Data 0.000 (0.001)	Loss 0.6917 (0.7624) ([0.692]+[0.000])	Prec@1 75.781 (73.461)
+Test: [49/79]	Time 0.005 (0.008)	Loss 0.8637 (1.0217) ([0.864]+[0.000])	Prec@1 72.656 (67.688)
+ * Prec@1 67.560
+
+ Elapsed time for training  0:02:59.151239
+Total parameter pruned: 9805824.0 (unstructured) 9805824 (structured)
+Test: [49/79]	Time 0.005 (0.008)	Loss 0.8637 (1.0217) ([0.864]+[0.000])	Prec@1 72.656 (67.688)
+ * Prec@1 67.560
+Best accuracy:  67.56
+Test: [49/79]	Time 0.024 (0.028)	Loss 0.8637 (1.0217) ([0.864]+[0.000])	Prec@1 72.656 (67.703)
+ * Prec@1 67.570
+ Real pruned parameter  9960453

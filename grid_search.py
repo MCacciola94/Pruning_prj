@@ -149,7 +149,7 @@ class Grid_Search():
 
                     #creating the actual pruned model
 
-                    model_pruned=torch.nn.DataParallel(resnet_pruned.__dict__[arch](num_classes))
+                    model_pruned=archs.load_arch_pruned(arch, num_classes)
                     qp.prune_thr(model_pruned,1.e-12)
                     base_checkpoint=torch.load(save_dir+'/model_best_val.th')
                     model_pruned.load_state_dict(base_checkpoint['state_dict'])
@@ -159,9 +159,12 @@ class Grid_Search():
                     trainer_pr = Trainer(model = model_pruned, dataset = dataset, reg = reg, lamb = lamb, threshold = threshold, threshold_str = threshold_str, 
                                         criterion =criterion, optimizer = None, lr_scheduler = lr_scheduler, save_dir = save_dir, save_every = save_every, print_freq = print_freq)
 
-                    model_pruned(torch.rand([1,3,32,32]))
+                    model_pruned(torch.rand([1,3,32,32]).cuda())
 
-                    en.compress_resnet(model_pruned)
+                    if 'resnet' in arch:
+                        en.compress_resnet(model_pruned)
+                    else:
+                        en.compress_vgg(model_pruned)
 
                     trainer_pr.validate(reg_on = False)
                     

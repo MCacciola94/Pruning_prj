@@ -178,6 +178,39 @@ def compress_shortcut_inp(block,idx_sc_pr):
     elif 'LambdaLayer' in str(type(sc)):
         block.pruned_shortcut+= [i+block.numb_added_planes//2 for i in idx_sc_pr]
 
+
+def compress_conv_bn_linear(conv1,bn,lin):
+    device='cpu'
+    if torch.cuda.is_available():
+        device= 'cuda:0'
+
+    original_out_channles=conv1.weight.size(0)
+
+#Compress conv1 and batchnorm
+    idx_not_pr = get_unpruned_filters(conv1)
+    
+    if len(idx_not_pr) < conv1.out_channels:
+        if len(idx_not_pr) == 0:
+                    idx_not_pr = [0]
+        idx_not_pr = torch.Tensor(idx_not_pr).type(torch.int).to(device)
+        compress_conv_filters(conv1,idx_not_pr)
+        compress_batchnorm(bn,idx_not_pr)
+
+        channel_size = lin.in_features/original_out_channles
+        # print(channel_size)
+        idx_aux=[]
+        for i in  idx_not_pr:
+            idx_aux += [i*channel_size + j for j in range(int(channel_size))]
+
+        idx_aux = torch.Tensor(idx_aux).type(torch.int).to(device)
+
+        compress_linear_in(lin,idx_aux)      
+    
+    return idx_not_pr
+
+
+
+
 # Copress an isolated sequence conv1->batchnorm->conv2, where the compression is consequence of the maskwise pruned filters of conv1
 def compress_conv_bn_conv(conv1,bn1,conv2):
     device='cpu'
@@ -323,7 +356,45 @@ def compress_resnet(net):
             if torch.norm(out_old_aux-out_new,p=2)>eps_debug:
                 print('Not equivalent ',conv)
 
+#Compress a vgg model that already have a pruning mask
+def compress_vgg(net):
+    if isinstance(net,nn.DataParallel):
+        net=net.module
 
+    # breakpoint()
+        j=0
+        while not isinstance(self.features[j], nn.Linear):
+
+            k=j+2
+            while (not isinstance(self.features[k], nn.Conv2d)) and (not isinstance(self.features[k], nn.Linear)):
+                k+=1
+
+            if isinstance(self.features[k], nn.Conv2d):
+                compress_conv_bn_conv(self.features[j],self.features[j+1],self.features[k])
+            else: 
+                compress_conv_bn_linear(self.features[j],self.features[j+1],self.features[k])
+
+            j=k
+                
+
+# Remove masks and other params
+    for module in net.modules():
+        if isinstance(module,nn.Conv2d):
+            remove_additional_pars_conv(module)
+        elif isinstance(module,nn.BatchNorm2d):
+            remove_additional_pars_bn(module)
+    # breakpoint()
+    if DEBUG:
+        for conv in out_old.keys():
+            dims= conv.weight.shape
+            ones =torch.ones(dims[1:])
+            out_new=conv(ones.cuda())
+            out_old_aux=out_old[conv]
+            # breakpoint()
+            idx= torch.norm(out_old_aux,dim=[1,2],p=2)!=0
+            out_old_aux =out_old_aux[idx]
+            if torch.norm(out_old_aux-out_new,p=2)>eps_debug:
+                print('Not equivalent ',conv)
 
 
 #Prune resnet20 starting froma checkpoint

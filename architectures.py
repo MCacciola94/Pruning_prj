@@ -1,5 +1,5 @@
-import resnet
-import resnetBig
+import resnet, resnet_pruned
+import resnetBig, resnetBig_pruned
 import vgg
 from torch.nn.utils import prune
 import torch
@@ -30,15 +30,8 @@ def load_arch(name, num_classes, resume = "", already_pruned = True):
                 model = resnetBig.__dict__[name](num_classes)
     else:
         model = models.__dict__[name]()
-      
-            
-
     
     model.cuda()
-
-    
-
-
 
     if not(resume == "")  and already_pruned:
         for m in model.modules(): 
@@ -49,6 +42,39 @@ def load_arch(name, num_classes, resume = "", already_pruned = True):
                     pruning_par.append((m,'bias'))
 
                 prune.global_unstructured(pruning_par, pruning_method=at.ThresholdPruning, threshold=1e-18)
+
+                
+    # optionally resume from a checkpoint
+
+    if resume:
+        if os.path.isfile(resume):
+            print("=> loading checkpoint '{}'".format(resume))
+            checkpoint = torch.load(resume)
+            model.load_state_dict(checkpoint['state_dict'])
+            print("=> loaded checkpoint '{}' (epoch {})"
+                .format(checkpoint['best_prec1'], checkpoint['epoch']))
+        else:
+            print("=> no checkpoint found at '{}'".format(resume))
+
+    return model
+
+def load_arch_pruned(name, num_classes, resume = "", already_pruned = True):
+    if not(is_available(name)):
+        print("Architecture requested not available")
+        return None
+
+    if num_classes <=100:
+        if name in model_names:
+            model = torch.nn.DataParallel(resnet_pruned.__dict__[name](num_classes))
+        else:
+            if "vgg" in name:
+                model = vgg.__dict__[name]()
+            else:
+                model = resnetBig_pruned.__dict__[name](num_classes)
+    else:
+        model = models.__dict__[name]()
+    
+    model.cuda()
 
                 
     # optionally resume from a checkpoint
