@@ -93,7 +93,9 @@ class Trainer():
         self.validate()
 
         #recovering all pruned weights that are not in a pruned entity
-        self.binary_thr_struct_search(10)
+        # self.binary_thr_struct_search(10)
+        qp.prune_struct(self.model,self.threshold_str)
+
         spars, tot_ = at.sparsityRate(self.model)
         
 
@@ -316,6 +318,8 @@ class Trainer():
 
         
     def binary_thr_search(self,iters):
+        self.model.eval()
+
         print('UNSTRUCT THRESHOLDING')
         device='cpu'
         if torch.cuda.is_available():
@@ -365,6 +369,7 @@ class Trainer():
 
         
     def binary_thr_struct_search(self,iters):
+        self.model.eval()
         device='cpu'
         if torch.cuda.is_available():
             device= 'cuda:0'
@@ -373,6 +378,7 @@ class Trainer():
         a=0
         b=1e-1
         last_feas_thr=a
+        # breakpoint()
         
         valid_loader_bck = self.dataset["valid_loader"]
         print_freq_bkp =self.print_freq

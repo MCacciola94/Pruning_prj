@@ -79,6 +79,9 @@ class PerspReg:
             conv_w = conv.weight
             conv_w=conv_w.reshape(conv_w.size(0),-1)
             group = torch.cat((conv_w,bnorm.weight.unsqueeze(1),bnorm.bias.unsqueeze(1)),dim=1)
+            if conv.bias is not None:
+                group = torch.cat((group,conv.bias.unsqueeze(1)),dim=1)
+
             reg+=self.compatible_group_computation(group,self.M[block['id']])
             tot+=group.numel()
 

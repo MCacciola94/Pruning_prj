@@ -11,6 +11,7 @@ import torch.nn.functional as F
 import resnet, resnet_pruned, resnetBig_pruned
 import torch.nn.utils.prune as prune
 import copy
+import vgg_pruned
 
 DEBUG =False
 eps_debug =1e-5
@@ -125,6 +126,12 @@ def compress_conv_filters(conv, idx_not_pr, debug =DEBUG):
     weight = conv.weight.data
     weight = torch.index_select(weight, dim = 0, index = idx_not_pr)
     conv.weight = nn.Parameter(weight)
+
+    if conv.bias is not None:
+        bias = conv.bias.data
+        bias = torch.index_select(bias, dim = 0, index = idx_not_pr)
+        conv.bias = nn.Parameter(bias)
+
     conv.out_channels = conv.weight.shape[0]
 
 # compress a conv layer selecting the desired input channels
@@ -361,21 +368,23 @@ def compress_vgg(net):
     if isinstance(net,nn.DataParallel):
         net=net.module
 
-    # breakpoint()
-        j=0
-        while not isinstance(self.features[j], nn.Linear):
+# breakpoint()
+    j=0
+    k=0
+    while k<len(net.features):
+        # breakpoint()
 
-            k=j+2
-            while (not isinstance(self.features[k], nn.Conv2d)) and (not isinstance(self.features[k], nn.Linear)):
-                k+=1
+        k=j+2
+        while  k<len(net.features) and (not isinstance(net.features[k], nn.Conv2d)):
+            k+=1
 
-            if isinstance(self.features[k], nn.Conv2d):
-                compress_conv_bn_conv(self.features[j],self.features[j+1],self.features[k])
-            else: 
-                compress_conv_bn_linear(self.features[j],self.features[j+1],self.features[k])
+        if k<len(net.features) and isinstance(net.features[k], nn.Conv2d):
+            compress_conv_bn_conv(net.features[j],net.features[j+1],net.features[k])
+        else: 
+            compress_conv_bn_linear(net.features[j],net.features[j+1],net.classifier)
 
-            j=k
-                
+        j=k
+            
 
 # Remove masks and other params
     for module in net.modules():
@@ -580,5 +589,74 @@ def unit_test_5010(name):
 
 
     return model_pruned, dataset
+
+
+
+#Prune resnet20 starting froma checkpoint
+def unit_test_1610(name):
+    
+    name='saves/save_V1.1.CP-_vgg16_Cifar10_lr0.1_l23.0_a0.5_e1+1_bs128_t0.05_tstr0.05_m0.9_wd0.0005_mlstemp1_Mscl1.0_structconvs_and_batchnorm_id1667857294/model_best_val.th'
+    # model_pruned=torch.nn.DataParallel(resnetBig_pruned.__dict__['resnet50'](10))
+    model_pruned= vgg_pruned.vgg16()
+
+    qp.prune_thr(model_pruned,1.e-4)
+
+    # base_checkpoint=torch.load("saves/save_" + args.name +"/checkpoint.th")
+    base_checkpoint=torch.load(name)
+
+    model_pruned.load_state_dict(base_checkpoint['state_dict'])
+
+    model_pruned.eval()
+    model_pruned(torch.rand([1,3,32,32]))
+
+    dataset = dl.load_dataset("Cifar10", 128)
+    # define loss function (criterion) and optimizer
+    criterion = nn.CrossEntropyLoss().cuda()
+    model_pruned.cuda()
+
+
+
+    optimizer_pruned = torch.optim.SGD(model_pruned.parameters(), 0.1,
+                                momentum=0.9,
+                                weight_decay=5e-4)
+
+    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer_pruned,
+                                                        milestones=[300], last_epoch= - 1)
+
+
+    trainer_pruned = Trainer(model = model_pruned, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, threshold_str=1e-4,
+                                            criterion =criterion, optimizer = optimizer_pruned, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
+
+    trainer_pruned.validate(reg_on = False)
+
+    breakpoint()
+    model_aux= copy.deepcopy(model_pruned)
+ 
+
+    _, sp_rate0_pr = at.sparsityRate(model_pruned)
+    pr_par0_pr = pruned_par(model_pruned)
+    tot0_pr = par_count(model_pruned)
+
+    compress_vgg(model_pruned)
+
+    breakpoint()
+
+    #print(model)
+    # new_tot = par_count(model)
+    # trainer.validate(reg_on = False)
+    trainer_pruned.validate(reg_on = False)
+
+
+
+    _, sp_rate1_pr = at.sparsityRate(model_pruned)
+    pr_par1_pr = pruned_par(model_pruned)
+    tot1_pr = par_count(model_pruned)
+
+
+    print('New stats ', tot0_pr-tot1_pr,' perc ', 100*(tot0_pr-tot1_pr)/tot0_pr )
+
+
+    return model_pruned, dataset
+
 
 
