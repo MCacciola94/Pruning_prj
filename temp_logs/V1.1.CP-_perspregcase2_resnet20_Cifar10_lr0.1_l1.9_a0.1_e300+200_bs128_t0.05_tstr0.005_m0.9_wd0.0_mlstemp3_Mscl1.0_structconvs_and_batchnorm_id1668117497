@@ -1,0 +1,10 @@
+V1.1.CP-_perspregcase2_resnet20_Cifar10_lr0.1_l1.9_a0.1_e300+200_bs128_t0.05_tstr0.005_m0.9_wd0.0_mlstemp3_Mscl1.0_structconvs_and_batchnorm_id1668117497
+Files already downloaded and verified
+Traceback (most recent call last):
+  File "/local1/caccmatt/Pruning_prj/grid_search.py", line 194, in <module>
+    main()
+  File "/local1/caccmatt/Pruning_prj/grid_search.py", line 191, in main
+    grid_search.run()
+  File "/local1/caccmatt/Pruning_prj/grid_search.py", line 133, in run
+    else: reg = oReg.__dict__[reg_type](alpha, scaled=False,option=structs)
+KeyError: 'perspregcase2'

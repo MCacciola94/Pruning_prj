@@ -28,7 +28,7 @@ def prune_struct(model, thr = 0.05,struct= 'convs_and_batchnorm'):
                     if conv.bias is not None:
                         conv.bias_mask[i]=1
                 else:
-                    cout+=1
+                    count+=1
                     conv.weight_mask[i,:]=0
                     bnorm.weight_mask[i]=0
                     bnorm.bias_mask[i]=0
