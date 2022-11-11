@@ -20,6 +20,7 @@ from trainer import Trainer
 import resnet_pruned
 import eval_net as en
 import quik_pruning as qp
+from otherReg import SCALED
 
 from time import time
 
@@ -31,7 +32,9 @@ milestones_dict = {"emp1": [120, 200, 230, 250, 350, 400, 450],
                     "emp4": [200, 250, 350, 400, 450],
                     "emp5": [200, 400],
                     "emp6": [75, 150, 250],
-                    "emp7": [100, 150]} 
+                    "emp7": [100, 150],
+                    "emp8": [120, 200, 230, 250, 400, 450,485],
+                    "emp9": [120, 200, 230, 250, 450]} 
 
 parser = argparse.ArgumentParser(description='Pruning using SPR term')
 parser.add_argument('--config', '-c',
@@ -82,7 +85,7 @@ class Grid_Search():
             for lamb in LAMBS:
                 for alpha in ALPHAS:
 
-                    name = (base_name + "_" +((reg_type + '_') if reg_type!='perspReg' else'')+ arch + "_" + dset + "_lr" + str(lr) + "_l" + str(lamb) + "_a" + 
+                    name = (base_name + "_" + ('scaled_' if (SCALED and 'persp' not in reg_type) else '') +((reg_type + '_') if reg_type!='perspReg' else'')+ arch + "_" + dset + "_lr" + str(lr) + "_l" + str(lamb) + "_a" + 
                             str(alpha) + "_e" + str(epochs) + "+" + str(finetuning_epochs) + "_bs" + str(batch_size) +
                             "_t" + str(threshold)+ "_tstr" + str(threshold_str) + "_m" + str(momentum) + "_wd" + str(weight_decay) + "_mlst" + milestones + "_Mscl" + str(M_scale)+ "_struct" + structs+'_id'+str(int(time())))
 
@@ -113,7 +116,7 @@ class Grid_Search():
 
                     if lamb == 0.0 and alpha == 0.0:
                         reg = at.noReg
-                    elif reg_type == 'perspReg':
+                    elif 'persp' in reg_type:
                         #Creating the perspective regualriation function
                         #Compute M values for each layer using a trained model 
                         torch.save(model.state_dict(),name + "rand_init.ph")
@@ -129,8 +132,12 @@ class Grid_Search():
 
                         print("M values:\n",M)
                         
-                        reg = pReg.PerspReg(alpha=alpha,M=M, option =structs, track_stats=track_stats)
-                    else: reg = oReg.__dict__[reg_type](alpha, scaled=False,option=structs)
+                        if 'perspReg' == reg_type:
+                            reg = pReg.PerspReg(alpha=alpha,M=M, option =structs, track_stats=track_stats)
+                        else: 
+                            reg = oReg.__dict__[reg_type](alpha,M,option=structs)
+
+                    else: reg = oReg.__dict__[reg_type](alpha,option=structs)
 
 
 
