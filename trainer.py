@@ -10,7 +10,7 @@ import aux_tools as at
 import quik_pruning as qp
 
 
-
+BN_SRCH_ITER = 10
 
 
 
@@ -85,7 +85,7 @@ class Trainer():
         # at.maxVal(self.model)   
         # Pruning parameters under the threshold
 
-        self.binary_thr_search(10)
+        self.binary_thr_search(BN_SRCH_ITER)
         spars, tot_p = at.sparsityRate(self.model)
         
         print("\n Total parameter pruned after unstruct thresholding:", tot_p[0], "(unstructured)", tot_p[1],"(structured)\n")

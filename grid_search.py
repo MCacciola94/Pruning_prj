@@ -21,6 +21,7 @@ import resnet_pruned
 import eval_net as en
 import quik_pruning as qp
 from otherReg import SCALED
+from trainer import BN_SRCH_ITER
 
 from time import time
 
@@ -85,7 +86,7 @@ class Grid_Search():
             for lamb in LAMBS:
                 for alpha in ALPHAS:
 
-                    name = (base_name + "_" + ('scaled_' if (SCALED and 'persp' not in reg_type) else '') +((reg_type + '_') if reg_type!='perspReg' else'')+ arch + "_" + dset + "_lr" + str(lr) + "_l" + str(lamb) + "_a" + 
+                    name = (base_name + "_"+ (('bnscIt'+str(BN_SRCH_ITER)+'_') if (BN_SRCH_ITER!=10) else '') + ('scaled_' if (SCALED and 'persp' not in reg_type) else '') +((reg_type + '_') if reg_type!='perspReg' else'')+ arch + "_" + dset + "_lr" + str(lr) + "_l" + str(lamb) + "_a" + 
                             str(alpha) + "_e" + str(epochs) + "+" + str(finetuning_epochs) + "_bs" + str(batch_size) +
                             "_t" + str(threshold)+ "_tstr" + str(threshold_str) + "_m" + str(momentum) + "_wd" + str(weight_decay) + "_mlst" + milestones + "_Mscl" + str(M_scale)+ "_struct" + structs+'_id'+str(int(time())))
 
@@ -166,7 +167,10 @@ class Grid_Search():
                     trainer_pr = Trainer(model = model_pruned, dataset = dataset, reg = reg, lamb = lamb, threshold = threshold, threshold_str = threshold_str, 
                                         criterion =criterion, optimizer = None, lr_scheduler = lr_scheduler, save_dir = save_dir, save_every = save_every, print_freq = print_freq)
 
-                    model_pruned(torch.rand([1,3,32,32]).cuda())
+                    if 'Cifar' in dset:
+                        model_pruned(torch.rand([1,3,32,32]).cuda())
+                    else: 
+                        model_pruned(torch.rand([1,3,256,256]).cuda())
 
                     if 'resnet' in arch:
                         en.compress_resnet(model_pruned)

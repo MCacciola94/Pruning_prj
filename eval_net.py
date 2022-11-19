@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import resnet, resnet_pruned, resnetBig_pruned
 import torch.nn.utils.prune as prune
 import copy
-import vgg_pruned
+import vgg_pruned, resnetBig_imgNet_pruned
 
 DEBUG =False
 eps_debug =1e-5
@@ -175,15 +175,22 @@ def compress_shortcut_inp(block,idx_sc_pr):
     device='cpu'
     if torch.cuda.is_available():
         device= 'cuda:0'
-    sc=block.shortcut
+
+    if hasattr(block, 'shortcut'):
+        sc=block.shortcut
+        sc_name = 'pruned_shortcut'
+    else: 
+        sc=block.downsample
+        sc_name = 'pruned_downsample'
+
     if isinstance(sc, nn.Sequential):
         if  len(sc)>0:
             idx_not_pr=[i for i in range(sc[0].weight.size(1)) if i not in idx_sc_pr]
             idx_not_pr = torch.Tensor(idx_not_pr).type(torch.int).to(device)
             compress_conv_channels(sc[0],idx_not_pr)
-        else: block.pruned_shortcut += idx_sc_pr
+        else: block.__dict__[sc_name] += idx_sc_pr
     elif 'LambdaLayer' in str(type(sc)):
-        block.pruned_shortcut+= [i+block.numb_added_planes//2 for i in idx_sc_pr]
+        block.__dict__[sc_name]+= [i+block.numb_added_planes//2 for i in idx_sc_pr]
 
 
 def compress_conv_bn_linear(conv1,bn,lin):
@@ -305,23 +312,36 @@ def compress_conv_bn_shortcut(conv1,bn,shortcut,pruned_shortcut,next_block):
 def compress_basicblock(block,next_block):
 
     compress_conv_bn_conv(block.conv1,block.bn1,block.conv2)
+
+    if hasattr(block, 'shortcut'):
+        sc=block.shortcut
+        sc_name = 'pruned_shortcut'
+    else: 
+        sc=block.downsample
+        sc_name = 'pruned_downsample'
     
-    idx_conv2_pruned, idx_sc_pruned= compress_conv_bn_shortcut(block.conv2, block.bn2, block.shortcut, block.pruned_shortcut, next_block)
+    idx_conv2_pruned, idx_sc_pruned= compress_conv_bn_shortcut(block.conv2, block.bn2, sc, block.__dict__[sc_name], next_block)
 
     block.pruned_filters_conv2=idx_conv2_pruned
-    block.pruned_shortcut = idx_sc_pruned
+    block.__dict__[sc_name] = idx_sc_pruned
 
 #Compress the classic resnet bottleneck block (3 conv, 3 batchnorm and a shortcut)
 def compress_bottleneck(block,next_block):
+    if hasattr(block, 'shortcut'):
+        sc=block.shortcut
+        sc_name = 'pruned_shortcut'
+    else: 
+        sc=block.downsample
+        sc_name = 'pruned_downsample'
 
     compress_conv_bn_conv(block.conv1,block.bn1,block.conv2)
 
     compress_conv_bn_conv(block.conv2,block.bn2,block.conv3)
     
-    idx_conv3, idx_sc= compress_conv_bn_shortcut(block.conv3,block.bn3,block.shortcut, block.pruned_shortcut,next_block)
+    idx_conv3, idx_sc= compress_conv_bn_shortcut(block.conv3,block.bn3,sc, block.__dict__[sc_name],next_block)
 
     block.pruned_filters_conv3 = idx_conv3
-    block.pruned_shortcut = idx_sc
+    block.__dict__[sc_name] = idx_sc
 
 
 #Compress a resnet model that already have a pruning mask
@@ -660,3 +680,97 @@ def unit_test_1610(name):
 
 
 
+def unit_test_501000(name):
+    
+    name='saves/save_V0.0.1-_resnet50_Imagenet_lr0.1_l0.6_a0.001_e150+50_bs256_t0.0001_m0.9_wd0.0001_mlstemp2_Mscl1.0/checkpoint.th'
+    # model_pruned=torch.nn.DataParallel(resnetBig_pruned.__dict__['resnet50'](10))
+    model_pruned= resnetBig_imgNet_pruned.resnet50()
+
+    qp.prune_thr(model_pruned,1.e-30)
+
+    # base_checkpoint=torch.load("saves/save_" + args.name +"/checkpoint.th")
+    base_checkpoint=torch.load(name)
+    if 'fc.weight' not in base_checkpoint['state_dict'].keys():
+        dict_temp=base_checkpoint['state_dict']
+        dict_temp['fc.weight']=dict_temp['fc.weight_orig']
+        dict_temp['fc.bias']=dict_temp['fc.bias_orig']
+        dict_temp.pop('fc.weight_orig')
+        dict_temp.pop('fc.bias_orig')
+        dict_temp.pop('fc.weight_mask')
+        dict_temp.pop('fc.bias_mask')
+        base_checkpoint['state_dict']=dict_temp
+
+    model_pruned.load_state_dict(base_checkpoint['state_dict'])
+
+    model_pruned.eval()
+    model_pruned(torch.rand([1,3,256,256]))
+
+    dataset = dl.load_dataset("Imagenet", 256)
+    # define loss function (criterion) and optimizer
+    criterion = nn.CrossEntropyLoss().cuda()
+    model_pruned.cuda()
+    model_pruned(torch.rand([1,3,256,256]).cuda())
+
+
+
+    optimizer_pruned = torch.optim.SGD(model_pruned.parameters(), 0.1,
+                                momentum=0.9,
+                                weight_decay=5e-4)
+
+    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer_pruned,
+                                                        milestones=[300], last_epoch= - 1)
+
+
+    trainer_pruned = Trainer(model = model_pruned, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, threshold_str=1e-4,
+                                            criterion =criterion, optimizer = optimizer_pruned, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
+
+    trainer_pruned.validate(reg_on = False)
+
+    # breakpoint()
+    model_aux= copy.deepcopy(model_pruned)
+ 
+
+    _, sp_rate0_pr = at.sparsityRate(model_pruned)
+    pr_par0_pr = pruned_par(model_pruned)
+    tot0_pr = par_count(model_pruned)
+
+    compress_resnet(model_pruned)
+
+    # breakpoint()
+
+    #print(model)
+    # new_tot = par_count(model)
+    # trainer.validate(reg_on = False)
+    trainer_pruned.validate(reg_on = False)
+
+
+
+    _, sp_rate1_pr = at.sparsityRate(model_pruned)
+    pr_par1_pr = pruned_par(model_pruned)
+    tot1_pr = par_count(model_pruned)
+    # print("tot berfore and after ",tot0, ' ', tot1, ' pr ', tot0_pr,' ', tot1_pr)
+    #print("new_tot ", new_tot)
+    # print("sparsity before and after ", sp_rate0, ' ', sp_rate1, ' pr ', sp_rate0_pr,' ', sp_rate1_pr )
+    # print("pruned par before and after ", pr_par0, ' ', pr_par1, ' pr ', pr_par0_pr,' ', pr_par1_pr )
+
+    print('New stats ', tot0_pr-tot1_pr,' perc ', 100*(tot0_pr-tot1_pr)/tot0_pr )
+    # fully_pruned= resnet_pruned.FullyCompressedResNet(copy.deepcopy(model_pruned))
+    # breakpoint()
+
+
+    # trainer_fully_pruned = Trainer(model = fully_pruned, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, threshold_str=1e-4,
+    #                                         criterion =criterion, optimizer = optimizer_pruned, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
+    # print('Fully pruned model acc ')
+    # trainer_fully_pruned.validate(reg_on = False)
+
+
+ 
+
+    # _, sp_rate_fll = at.sparsityRate(fully_pruned)
+    # pr_par_fll = pruned_par(fully_pruned)
+    # tot_fll = par_count(fully_pruned)
+
+    # print('Final stats ', tot0_pr-tot_fll,' perc ', 100*(tot0_pr-tot_fll)/tot0_pr )
+
+
+    return model_pruned, dataset

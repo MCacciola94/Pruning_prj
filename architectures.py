@@ -1,9 +1,9 @@
-import resnet, resnet_pruned
-import resnetBig, resnetBig_pruned
-import vgg
+import resnet, resnet_pruned, resnetBig_imgNet
+import resnetBig, resnetBig_pruned,resnetBig_imgNet_pruned
+import vgg, vgg_pruned
 from torch.nn.utils import prune
 import torch
-import torchvision.models as models
+# import torchvision.models as models
 
 model_names = sorted(name for name in resnet.__dict__
     if name.islower() and not name.startswith("__")
@@ -29,7 +29,7 @@ def load_arch(name, num_classes, resume = "", already_pruned = True):
             else:
                 model = resnetBig.__dict__[name](num_classes)
     else:
-        model = models.__dict__[name]()
+        model = resnetBig_imgNet.__dict__[name]()
     
     model.cuda()
 
@@ -68,11 +68,11 @@ def load_arch_pruned(name, num_classes, resume = "", already_pruned = True):
             model = torch.nn.DataParallel(resnet_pruned.__dict__[name](num_classes))
         else:
             if "vgg" in name:
-                model = vgg.__dict__[name]()
+                model = vgg_pruned.__dict__[name]()
             else:
                 model = resnetBig_pruned.__dict__[name](num_classes)
     else:
-        model = models.__dict__[name]()
+        model = resnetBig_imgNet_pruned.__dict__[name]()
     
     model.cuda()
 
