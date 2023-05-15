@@ -1,5 +1,6 @@
 data/
 saves/
+saves_bkp/
 pretrained_models/
 torchEnv/
 nohup.out

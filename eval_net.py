@@ -774,3 +774,113 @@ def unit_test_501000(name):
 
 
     return model_pruned, dataset
+
+
+import resnetBig_imgNet
+def unit_test_181000(name):
+    
+    name='saves/save_V1.1.CP-_resnet18_Imagenet_lr0.1_l1.1_a0.1_e150+50_bs256_t0.05_tstr0.005_m0.9_wd0.0001_mlstemp2_Mscl1.0_structconvs_and_batchnorm_id1670249340/model_best_val.th'
+    # model_pruned=torch.nn.DataParallel(resnetBig_pruned.__dict__['resnet18'](1000))
+    model_pruned= resnetBig_imgNet_pruned.resnet18()
+    model_pruned=torch.nn.DataParallel(model_pruned)
+    model= resnetBig_imgNet.resnet18()
+    model=torch.nn.DataParallel(model)
+
+    qp.prune_thr(model_pruned,1.e-30)
+    # qp.prune_thr(model,1.e-30)
+    # breakpoint()
+    # base_checkpoint=torch.load("saves/save_" + args.name +"/checkpoint.th")
+    base_checkpoint=torch.load(name)
+    if 'module.fc.weight' not in base_checkpoint['state_dict'].keys():
+        dict_temp=base_checkpoint['state_dict']
+        dict_temp['fc.weight']=dict_temp['fc.weight_orig']
+        dict_temp['fc.bias']=dict_temp['fc.bias_orig']
+        dict_temp.pop('fc.weight_orig')
+        dict_temp.pop('fc.bias_orig')
+        dict_temp.pop('fc.weight_mask')
+        dict_temp.pop('fc.bias_mask')
+        base_checkpoint['state_dict']=dict_temp
+
+    model_pruned.load_state_dict(base_checkpoint['state_dict'])
+    # model.load_state_dict(base_checkpoint['state_dict'])
+
+
+    model_pruned.eval()
+    model_pruned(torch.rand([1,3,256,256]))
+
+    # model.eval()
+    # model(torch.rand([1,3,256,256]))
+    # a,b = at.sparsityRate(model_pruned)
+    # print('orig sp rate, ',a,'  ',b)
+
+
+
+    dataset = dl.load_dataset("Imagenet", 256)
+    # define loss function (criterion) and optimizer
+    criterion = nn.CrossEntropyLoss().cuda()
+    model_pruned.cuda()
+    model_pruned(torch.rand([1,3,256,256]).cuda())
+
+
+
+    optimizer_pruned = torch.optim.SGD(model_pruned.parameters(), 0.1,
+                                momentum=0.9,
+                                weight_decay=5e-4)
+
+    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer_pruned,
+                                                        milestones=[300], last_epoch= - 1)
+
+
+    trainer_pruned = Trainer(model = model_pruned, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, threshold_str=1e-4,
+                                            criterion =criterion, optimizer = optimizer_pruned, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
+
+    trainer_pruned.validate(reg_on = False)
+
+    # breakpoint()
+    model_aux= copy.deepcopy(model_pruned)
+ 
+
+    _, sp_rate0_pr = at.sparsityRate(model_pruned)
+    pr_par0_pr = pruned_par(model_pruned)
+    tot0_pr = par_count(model_pruned)
+
+    compress_resnet(model_pruned)
+
+    # breakpoint()
+
+    #print(model)
+    # new_tot = par_count(model)
+    # trainer.validate(reg_on = False)
+    trainer_pruned.validate(reg_on = False)
+
+
+
+    _, sp_rate1_pr = at.sparsityRate(model_pruned)
+    pr_par1_pr = pruned_par(model_pruned)
+    tot1_pr = par_count(model_pruned)
+    # print("tot berfore and after ",tot0, ' ', tot1, ' pr ', tot0_pr,' ', tot1_pr)
+    #print("new_tot ", new_tot)
+    # print("sparsity before and after ", sp_rate0, ' ', sp_rate1, ' pr ', sp_rate0_pr,' ', sp_rate1_pr )
+    # print("pruned par before and after ", pr_par0, ' ', pr_par1, ' pr ', pr_par0_pr,' ', pr_par1_pr )
+
+    print('New stats ', tot0_pr-tot1_pr,' perc ', 100*(tot0_pr-tot1_pr)/tot0_pr, 'new num par ', tot1_pr, 'origin ', tot0_pr)
+    # fully_pruned= resnet_pruned.FullyCompressedResNet(copy.deepcopy(model_pruned))
+    # breakpoint()
+
+
+    # trainer_fully_pruned = Trainer(model = fully_pruned, dataset = dataset, reg = None, lamb = 1.0, threshold = 0.05, threshold_str=1e-4,
+    #                                         criterion =criterion, optimizer = optimizer_pruned, lr_scheduler = lr_scheduler, save_dir = "./delete_this_folder", save_every = 44, print_freq = 100)
+    # print('Fully pruned model acc ')
+    # trainer_fully_pruned.validate(reg_on = False)
+
+
+ 
+
+    # _, sp_rate_fll = at.sparsityRate(fully_pruned)
+    # pr_par_fll = pruned_par(fully_pruned)
+    # tot_fll = par_count(fully_pruned)
+
+    # print('Final stats ', tot0_pr-tot_fll,' perc ', 100*(tot0_pr-tot_fll)/tot0_pr )
+
+
+    return model_pruned, dataset
