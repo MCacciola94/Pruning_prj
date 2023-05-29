@@ -40,13 +40,16 @@ milestones_dict = {"emp1": [120, 200, 230, 250, 350, 400, 450],
 parser = argparse.ArgumentParser(description='Pruning using SPR term')
 parser.add_argument('--config', '-c',
                     help="Name of the configuration file")
+parser.add_argument('--resume_path', '-rp',
+                    help="resume path")
 ############################################################################################
 
 
 
-class Grid_Search():
-    def __init__(self, config_file):
-        self.config_file = config_file
+class Runner():
+    def __init__(self, args):
+        self.config_file = args.config
+        self.resume_path = args.resume_path
     
     def run(self):
         conf = configparser.ConfigParser()
@@ -55,135 +58,99 @@ class Grid_Search():
         ##############################################################
         cudnn.benchmark = True
         conf1 = conf["conf1"]
-        LRS = to_list_of_float(conf1.get("LRS"))
-        LAMBS = to_list_of_float(conf1.get("LAMBS"))
-        ALPHAS = to_list_of_float(conf1.get("ALPHAS"))
         arch = conf1.get("arch")
         dset = conf1.get("dset")
-        epochs = conf1.getint("epochs")
-        finetuning_epochs = conf1.getint("finetuning_epochs")
         batch_size = conf1.getint("batch_size")
-        threshold = conf1.getfloat("threshold")
-        threshold_str = conf1.getfloat("threshold_str")
-        momentum = conf1.getfloat("momentum")
-        weight_decay = conf1.getfloat("weight_decay")
-        milestones = conf1.get("milestones")
-        evaluate = conf1.getboolean("evaluate", "False")
-        save_every = conf1.getint("save_every", str((epochs+finetuning_epochs)*0.2))
-        print_freq = conf1.getint("print_freq", "100")
-        M_scale = conf1.getfloat("M_scale", 1.0)
-        structs = conf1.get("structs", 'convs_and_batchnorm')
-        base_name = conf1.get("base_name")
-        reg_type = conf1.get("reg_type", 'perspReg')
-        track_stats= conf1.get("track_stats", False)
+
+
+
+        resume_path = self.resume_path
+
         ##############################################################
 
         ################################################################
         #       Main triple loop on configurations
         ################################################################
 
-        for lr in LRS:
-            for lamb in LAMBS:
-                for alpha in ALPHAS:
-
-                    name = (base_name + "_"+ (('bnscIt'+str(BN_SRCH_ITER)+'_') if (BN_SRCH_ITER!=10) else '') + ('scaled_' if (SCALED and 'persp' not in reg_type) else '') +((reg_type + '_') if reg_type!='perspReg' else'')+ arch + "_" + dset + "_lr" + str(lr) + "_l" + str(lamb) + "_a" + 
-                            str(alpha) + "_e" + str(epochs) + "+" + str(finetuning_epochs) + "_bs" + str(batch_size) +
-                            "_t" + str(threshold)+ "_tstr" + str(threshold_str) + "_m" + str(momentum) + "_wd" + str(weight_decay) + "_mlst" + milestones + "_Mscl" + str(M_scale)+ "_struct" + structs+'_id'+str(int(time())))
-
-                    save_dir = "saves/save_" + name
-                    log_file = open("temp_logs/" + name, "w")
-                    sys.stdout = log_file
-                    sys.stderr = sys.stdout
-                    print(name)
-                    
-                    if dset == "Cifar10": num_classes = 10
-                    elif dset == "Cifar100": num_classes = 100
-                    elif dset == "Imagenet": num_classes = 1000
-
-                    model = archs.load_arch(arch, num_classes)
-                    dataset = dl.load_dataset(dset, batch_size)
 
 
-                    # define loss function (criterion) and optimizer
-                    criterion = nn.CrossEntropyLoss().cuda()
+   
+        save_dir = resume_path
+        
+        if dset == "Cifar10": num_classes = 10
+        elif dset == "Cifar100": num_classes = 100
+        elif dset == "Imagenet": num_classes = 1000
+        if 'Cifar' in dset:
+            img_len =32
+        else: 
+            img_len = 256
+
+        model = archs.load_arch(arch, num_classes, resume = resume_path)#,already_pruned = False)
+        dataset = dl.load_dataset(dset, batch_size)
 
 
-                    optimizer = torch.optim.SGD(model.parameters(), lr,
-                                                momentum=momentum,
-                                                weight_decay=weight_decay)
+        # define loss function (criterion) and optimizer
+        criterion = nn.CrossEntropyLoss().cuda()
 
-                    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
-                                                                        milestones=milestones_dict[milestones], last_epoch= - 1)
 
-                    if lamb == 0.0 and alpha == 0.0:
-                        reg = at.noReg
-                    elif 'persp' in reg_type:
-                        #Creating the perspective regualriation function
-                        #Compute M values for each layer using a trained model 
-                        torch.save(model.state_dict(),name + "rand_init.ph")
-                        base_checkpoint=torch.load("saves/save_" + arch + "_" + dset + "_first_original/checkpoint.th")
-                        model.load_state_dict(base_checkpoint['state_dict'])
-                        if structs == 'single_convs':
-                            M=at.layerwise_M(model, scale = M_scale) #a dictionary withe hte value of M for each layer of the model
-                        elif structs == 'convs_and_batchnorm':
-                             M=at.blockwise_M(model, scale = M_scale) 
+        optimizer = torch.optim.SGD(model.parameters(), 0.0,
+                                    momentum=0.0,
+                                    weight_decay=0.0)
 
-                        model.load_state_dict(torch.load(name  + "rand_init.ph"))
-                        os.remove(name + "rand_init.ph")
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
+                                                            milestones=[1e+100], last_epoch= - 1)
 
-                        print("M values:\n",M)
-                        
-                        if 'perspReg' == reg_type:
-                            reg = pReg.PerspReg(alpha=alpha,M=M, option =structs, track_stats=track_stats)
-                        else: 
-                            reg = oReg.__dict__[reg_type](alpha,M,option=structs)
 
-                    else: reg = oReg.__dict__[reg_type](alpha,option=structs)
+        reg = at.noReg
+
+        trainer = Trainer(model = model, dataset = dataset, reg = reg, lamb = 0.0, threshold = 0.0, threshold_str = 0.0, 
+                            criterion  =criterion, optimizer = None, lr_scheduler = lr_scheduler, save_dir = "del_this", save_every = 1e+10, print_freq = 100)
+
+
+        if dset == "Imagenet":
+            trainer.top5_comp = True
+
+        # trainer.validate(reg_on = False)
+        model(torch.rand([1,3,img_len,img_len]).cuda())
 
 
 
-                    
-                    trainer = Trainer(model = model, dataset = dataset, reg = reg, lamb = lamb, threshold = threshold, threshold_str = threshold_str, 
-                                        criterion =criterion, optimizer = optimizer, lr_scheduler = lr_scheduler, save_dir = save_dir, save_every = save_every, print_freq = print_freq)
+        #creating the actual pruned model
+
+        model_pruned=archs.load_arch_pruned(arch, num_classes)
+        qp.prune_thr(model_pruned,1.e-12)
+        base_checkpoint=torch.load(save_dir)
+        model_pruned.load_state_dict(base_checkpoint['state_dict'])
+
+        model_pruned.eval()
+
+        trainer_pr = Trainer(model = model_pruned, dataset = dataset, reg = reg, lamb = 0.0, threshold = 0.0, threshold_str = 0.0, 
+                            criterion =criterion, optimizer = None, lr_scheduler = lr_scheduler, save_dir = "del_this", save_every = 1e+100, print_freq = 100)
 
 
-                    if dset == "Imagenet":
-                        trainer.top5_comp = True
+        
+        model_pruned(torch.rand([1,3,img_len,img_len]).cuda())
+        
 
-                    if evaluate:
-                        trainer.validate()
-                    else:
-                        trainer.train(epochs, finetuning_epochs)
+        if 'resnet' in arch:
+            en.compress_resnet(model_pruned)
+        else:
+            en.compress_vgg(model_pruned)
 
-                    #creating the actual pruned model
+        # trainer_pr.validate(reg_on = False)
+        model_pruned(torch.rand([1,3,img_len,img_len]).cuda())
 
-                    model_pruned=archs.load_arch_pruned(arch, num_classes)
-                    qp.prune_thr(model_pruned,1.e-12)
-                    base_checkpoint=torch.load(save_dir+'/model_best_val.th')
-                    model_pruned.load_state_dict(base_checkpoint['state_dict'])
+        
+        print(' Real pruned parameter ',en.par_count(model)-en.par_count(model_pruned))
+        import get_flops
+        flops_orig, params= get_flops.measure_model(model,'cuda:0',3,img_len,img_len, False)
+        print('flops ', flops_orig, 'params', params)
+        flops, params= get_flops.measure_model(model_pruned,'cuda:0',3,img_len,img_len, False)
+        print('Pruned: flops ', flops, 'params', params, ' perc flops ',flops/flops_orig*100 )
+        print(en.par_count(model))
+        # breakpoint()
 
-                    model_pruned.eval()
-
-                    trainer_pr = Trainer(model = model_pruned, dataset = dataset, reg = reg, lamb = lamb, threshold = threshold, threshold_str = threshold_str, 
-                                        criterion =criterion, optimizer = None, lr_scheduler = lr_scheduler, save_dir = save_dir, save_every = save_every, print_freq = print_freq)
-
-                    if 'Cifar' in dset:
-                        model_pruned(torch.rand([1,3,32,32]).cuda())
-                    else: 
-                        model_pruned(torch.rand([1,3,256,256]).cuda())
-
-                    if 'resnet' in arch:
-                        en.compress_resnet(model_pruned)
-                    else:
-                        en.compress_vgg(model_pruned)
-
-                    trainer_pr.validate(reg_on = False)
-                    
-                    print(' Real pruned parameter ',en.par_count(model)-en.par_count(model_pruned))
-                    if track_stats:
-                        print(' Reg cases stats ', reg.stats)
-                    
-                    log_file.close()
+        
                     
                     
 def to_list_of_float(list_string, sep = ","):
@@ -198,8 +165,8 @@ def to_list_of_int(list_string, sep = ","):
 
 def main():
     args = parser.parse_args()
-    grid_search = Grid_Search(args.config)
-    grid_search.run()
+    runner = Runner(args)
+    runner.run()
 
 if __name__ == "__main__":
     main()

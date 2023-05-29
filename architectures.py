@@ -3,6 +3,8 @@ import resnetBig, resnetBig_pruned,resnetBig_imgNet_pruned
 import vgg, vgg_pruned
 from torch.nn.utils import prune
 import torch
+import aux_tools as at
+import os
 # import torchvision.models as models
 
 model_names = sorted(name for name in resnet.__dict__
@@ -30,11 +32,14 @@ def load_arch(name, num_classes, resume = "", already_pruned = True):
                 model = resnetBig.__dict__[name](num_classes)
     else:
         model = resnetBig_imgNet.__dict__[name]()
+        # model = torch.nn.DataParallel(model)    
     
     model.cuda()
 
     if not(resume == "")  and already_pruned:
         for m in model.modules(): 
+            if isinstance(m,torch.nn.Linear):
+                continue
             if hasattr(m, 'weight'):
                 pruning_par=[((m,'weight'))]
 
@@ -51,8 +56,8 @@ def load_arch(name, num_classes, resume = "", already_pruned = True):
             print("=> loading checkpoint '{}'".format(resume))
             checkpoint = torch.load(resume)
             model.load_state_dict(checkpoint['state_dict'])
-            print("=> loaded checkpoint '{}' (epoch {})"
-                .format(checkpoint['best_prec1'], checkpoint['epoch']))
+            print("=> loaded checkpoint '{}'"# (epoch {})"
+                .format(checkpoint['best_prec1']))#, checkpoint['epoch']))
         else:
             print("=> no checkpoint found at '{}'".format(resume))
 
@@ -73,7 +78,7 @@ def load_arch_pruned(name, num_classes, resume = "", already_pruned = True):
                 model = resnetBig_pruned.__dict__[name](num_classes)
     else:
         model = resnetBig_imgNet_pruned.__dict__[name]()
-    
+        # model = torch.nn.DataParallel(model)    
     model.cuda()
 
                 

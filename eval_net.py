@@ -36,12 +36,17 @@ def par_count(model,conv=True,bias_conv=True, linear=True, bias_linear=True, bat
         
         if isinstance(m,nn.Conv2d) and (conv or all_modules):
             res+=par_count_module(m, bias=(bias_conv or all_modules))
+            # print(m.weight.shape,' ',par_count_module(m, bias=(bias_conv or all_modules)))
 
         if isinstance(m,nn.Linear) and (linear or all_modules):
             res+=par_count_module(m, bias=(bias_linear or all_modules))
+            # print(m.weight.shape,' ',par_count_module(m, bias=(bias_conv or all_modules)))
+
 
         if isinstance(m,nn.BatchNorm2d) and (batchnorm or all_modules):
             res+=par_count_module(m, bias=(bias_batchnorm or all_modules))
+            # print(m.weight.shape,' ',par_count_module(m, bias=(bias_conv or all_modules)))
+
 
     return res
 
