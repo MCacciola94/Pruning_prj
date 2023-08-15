@@ -160,3 +160,32 @@ def perspregcase3(alpha,M, option= 'convs_and_batchnorm'):
     return perspregcasex(alpha,M, case=3, option=option)
   
     
+class l1reg: 
+    def __init__(self,alpha):
+        self.alpha=alpha
+    #Computation of the current factor
+    def __call__(self,net, lamb = 0.1):
+
+        reg= self.compute_by_convs(net)
+
+
+        return lamb* reg
+
+    def l1_computation(self,weigths):
+        alpha= self.alpha
+        l1pen = torch.norm(weigths,p=1)
+        l2pen = torch.norm(weigths,p=2)
+        return alpha* l2pen**2+(1-alpha)*l1pen
+
+    def compute_by_convs(self,net):
+        reg = 0  
+        tot=0  
+
+        for m in net.modules():
+            if isinstance(m,torch.nn.Conv2d):
+                group = m.weight
+                tot+= group.numel()
+                reg+=self.l1_computation(group.reshape(group.numel()))
+                
+
+        return reg/tot
