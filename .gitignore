@@ -4,3 +4,6 @@ saves_bkp/
 pretrained_models/
 torchEnv/
 nohup.out
+temp_logs/
+logs/
+__pycache__/

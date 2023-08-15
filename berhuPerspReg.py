@@ -49,14 +49,16 @@ class perspBerhu:
         return reg
 
     def compute_by_convs(self,net):
-        reg = 0    
+        reg = 0
+        tot=0    
 
         for m in net.modules():
             if isinstance(m,torch.nn.Conv2d):
                 group = m.weight
+                tot+= group.numel()
                 reg+=self.berhu_computation(group.reshape(group.numel()), self.M[m])
                 
 
-        return reg
+        return reg/tot
 
  
