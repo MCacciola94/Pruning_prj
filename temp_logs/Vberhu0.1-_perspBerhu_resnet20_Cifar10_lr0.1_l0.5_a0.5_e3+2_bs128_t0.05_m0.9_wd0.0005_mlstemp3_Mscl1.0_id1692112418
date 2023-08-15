@@ -1,0 +1,89 @@
+Vberhu0.1-_perspBerhu_resnet20_Cifar10_lr0.1_l0.5_a0.5_e3+2_bs128_t0.05_m0.9_wd0.0005_mlstemp3_Mscl1.0_id1692112418
+Files already downloaded and verified
+M vals:
+ {Conv2d(3, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 1.6352988481521606, Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 1.169867753982544, Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.9106662273406982, Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.7931119203567505, Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.654869556427002, Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.9789378643035889, Conv2d(16, 16, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.7008146047592163, Conv2d(16, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False): 0.6066990494728088, Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.6057915091514587, Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.6954296231269836, Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.40856727957725525, Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.7257518768310547, Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.5365347862243652, Conv2d(32, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False): 0.48648884892463684, Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.5309917330741882, Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.39136967062950134, Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.41638830304145813, Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.43563324213027954, Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False): 0.300857812166214, Linear(in_features=64, out_features=10, bias=True): 1.863915205001831}
+current lr 1.00000e-01
+Grad=  tensor(43813.6602, device='cuda:0')
+Epoch: [0][0/391]	Time 1.559 (1.559)	Data 0.178 (0.178)	Loss 5879.9790 (5879.9790) ([3.561]+[5876.418])	Prec@1 8.594 (8.594)
+Epoch: [0][100/391]	Time 0.023 (0.037)	Data 0.000 (0.002)	Loss 4459.4302 (4407.6432) ([2.358]+[4457.072])	Prec@1 14.062 (12.167)
+Epoch: [0][200/391]	Time 0.022 (0.030)	Data 0.000 (0.001)	Loss 4491.6626 (4385.1405) ([2.327]+[4489.336])	Prec@1 13.281 (12.795)
+Epoch: [0][300/391]	Time 0.021 (0.027)	Data 0.000 (0.001)	Loss 4508.2026 (4384.6323) ([2.316]+[4505.887])	Prec@1 8.594 (12.988)
+Test: [49/79]	Time 0.010 (0.013)	Loss 4366.6230 (4366.8286) ([3.181]+[4363.441])	Prec@1 10.156 (11.656)
+ * Prec@1 11.580
+current lr 1.00000e-01
+Grad=  tensor(43767.5234, device='cuda:0')
+Epoch: [1][0/391]	Time 0.163 (0.163)	Data 0.122 (0.122)	Loss 4365.6577 (4365.6577) ([2.216]+[4363.441])	Prec@1 17.188 (17.188)
+Epoch: [1][100/391]	Time 0.022 (0.023)	Data 0.000 (0.001)	Loss 4372.3774 (4400.4209) ([2.288]+[4370.089])	Prec@1 10.938 (14.349)
+Epoch: [1][200/391]	Time 0.021 (0.023)	Data 0.000 (0.001)	Loss 4372.6899 (4406.1202) ([2.236]+[4370.454])	Prec@1 17.188 (14.544)
+Epoch: [1][300/391]	Time 0.021 (0.022)	Data 0.000 (0.001)	Loss 4385.2695 (4410.3661) ([2.181]+[4383.088])	Prec@1 20.312 (14.737)
+Test: [49/79]	Time 0.010 (0.013)	Loss 4491.1533 (4491.5134) ([4.121]+[4487.032])	Prec@1 10.156 (10.031)
+ * Prec@1 10.000
+current lr 1.00000e-01
+Grad=  tensor(43768.1328, device='cuda:0')
+Epoch: [2][0/391]	Time 0.163 (0.163)	Data 0.129 (0.129)	Loss 4489.2583 (4489.2583) ([2.226]+[4487.032])	Prec@1 14.844 (14.844)
+Epoch: [2][100/391]	Time 0.022 (0.024)	Data 0.000 (0.001)	Loss 4496.0693 (4431.9031) ([2.179]+[4493.891])	Prec@1 19.531 (16.159)
+Epoch: [2][200/391]	Time 0.022 (0.023)	Data 0.000 (0.001)	Loss 4511.4365 (4436.7361) ([2.202]+[4509.235])	Prec@1 18.750 (15.571)
+Epoch: [2][300/391]	Time 0.022 (0.022)	Data 0.000 (0.001)	Loss 4512.3062 (4441.5746) ([2.201]+[4510.105])	Prec@1 21.094 (15.685)
+Test: [49/79]	Time 0.011 (0.013)	Loss 4338.7778 (4339.0541) ([3.406]+[4335.372])	Prec@1 8.594 (7.766)
+ * Prec@1 7.720
+
+ Elapsed time for training  0:00:30.650816
+Total parameter pruned without thresholding: 0.0 (unstructured) 0 (structured)
+UNSTRUCT THRESHOLDING
+original accuracy
+ * Prec@1 7.764
+ * Prec@1 7.764
+current threshold  0.05
+ * Prec@1 6.854
+current threshold  0.025
+ * Prec@1 7.558
+current threshold  0.0125
+ * Prec@1 7.300
+current threshold  0.00625
+ * Prec@1 7.740
+current threshold  0.009375000000000001
+ * Prec@1 7.708
+current threshold  0.0078125
+ * Prec@1 7.790
+current threshold  0.00859375
+ * Prec@1 7.764
+current threshold  0.008984375000000001
+ * Prec@1 7.952
+current threshold  0.009179687500000002
+ * Prec@1 7.836
+current threshold  0.009277343750000002
+ * Prec@1 7.750
+Final unstruct threshold  0.009277343750000002
+ * Prec@1 7.750
+
+ Total parameter pruned after unstruct thresholding: 42303.000389009714 (unstructured) 0 (structured)
+
+Test: [49/79]	Time 0.012 (0.015)	Loss 4259.8433 (4260.1092) ([3.327]+[4256.516])	Prec@1 7.031 (7.797)
+ * Prec@1 7.780
+
+ Total elapsed time  0:01:06.095334 
+ FINETUNING
+
+current lr 1.00000e-01
+Grad=  tensor(1.9720, device='cuda:0')
+Epoch: [3][0/391]	Time 0.177 (0.177)	Data 0.144 (0.144)	Loss 2.2852 (2.2852) ([2.285]+[0.000])	Prec@1 9.375 (9.375)
+Epoch: [3][100/391]	Time 0.013 (0.015)	Data 0.000 (0.002)	Loss 2.0493 (2.0448) ([2.049]+[0.000])	Prec@1 28.125 (22.517)
+Epoch: [3][200/391]	Time 0.013 (0.014)	Data 0.000 (0.001)	Loss 1.7151 (1.9477) ([1.715]+[0.000])	Prec@1 35.156 (25.707)
+Epoch: [3][300/391]	Time 0.015 (0.014)	Data 0.000 (0.001)	Loss 1.5749 (1.8678) ([1.575]+[0.000])	Prec@1 37.500 (28.919)
+Test: [49/79]	Time 0.006 (0.009)	Loss 1.7294 (1.8978) ([1.729]+[0.000])	Prec@1 33.594 (36.266)
+ * Prec@1 36.410
+current lr 1.00000e-01
+Grad=  tensor(0.3720, device='cuda:0')
+Epoch: [4][0/391]	Time 0.149 (0.149)	Data 0.126 (0.126)	Loss 1.4750 (1.4750) ([1.475]+[0.000])	Prec@1 41.406 (41.406)
+Epoch: [4][100/391]	Time 0.013 (0.014)	Data 0.000 (0.001)	Loss 1.4777 (1.5421) ([1.478]+[0.000])	Prec@1 48.438 (42.071)
+Epoch: [4][200/391]	Time 0.013 (0.013)	Data 0.000 (0.001)	Loss 1.5192 (1.4904) ([1.519]+[0.000])	Prec@1 42.188 (44.364)
+Epoch: [4][300/391]	Time 0.013 (0.013)	Data 0.000 (0.001)	Loss 1.3007 (1.4549) ([1.301]+[0.000])	Prec@1 53.906 (45.891)
+Test: [49/79]	Time 0.007 (0.009)	Loss 1.1874 (1.2288) ([1.187]+[0.000])	Prec@1 51.562 (55.031)
+ * Prec@1 54.690
+
+ Elapsed time for training  0:01:18.015796
+Total parameter pruned: 42303.000389009714 (unstructured) 0 (structured)
+Test: [49/79]	Time 0.007 (0.009)	Loss 1.1874 (1.2288) ([1.187]+[0.000])	Prec@1 51.562 (55.031)
+ * Prec@1 54.690
+Best accuracy:  54.69
+ Reg cases stats  {'case1': 1, 'case2': 4073904, 'case3': 394525439}

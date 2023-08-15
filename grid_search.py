@@ -12,7 +12,8 @@ from torch.nn.utils import prune
 
 #My pkgs
 import aux_tools as at
-import perspReg as pReg
+# import perspReg as pReg
+import berhuPerspReg as bpreg
 import otherReg as oReg
 import architectures as archs
 import data_loaders as dl
@@ -64,7 +65,7 @@ class Grid_Search():
         finetuning_epochs = conf1.getint("finetuning_epochs")
         batch_size = conf1.getint("batch_size")
         threshold = conf1.getfloat("threshold")
-        threshold_str = conf1.getfloat("threshold_str")
+        # threshold_str = conf1.getfloat("threshold_str")
         momentum = conf1.getfloat("momentum")
         weight_decay = conf1.getfloat("weight_decay")
         milestones = conf1.get("milestones")
@@ -72,9 +73,9 @@ class Grid_Search():
         save_every = conf1.getint("save_every", str((epochs+finetuning_epochs)*0.2))
         print_freq = conf1.getint("print_freq", "100")
         M_scale = conf1.getfloat("M_scale", 1.0)
-        structs = conf1.get("structs", 'convs_and_batchnorm')
+        # structs = conf1.get("structs", 'convs_and_batchnorm')
         base_name = conf1.get("base_name")
-        reg_type = conf1.get("reg_type", 'perspReg')
+        reg_type = conf1.get("reg_type", 'perspBerhu')
         track_stats= conf1.get("track_stats", False)
         ##############################################################
 
@@ -88,7 +89,7 @@ class Grid_Search():
 
                     name = (base_name + "_"+ (('bnscIt'+str(BN_SRCH_ITER)+'_') if (BN_SRCH_ITER!=10) else '') + ('scaled_' if (SCALED and 'persp' not in reg_type) else '') +((reg_type + '_') if reg_type!='perspReg' else'')+ arch + "_" + dset + "_lr" + str(lr) + "_l" + str(lamb) + "_a" + 
                             str(alpha) + "_e" + str(epochs) + "+" + str(finetuning_epochs) + "_bs" + str(batch_size) +
-                            "_t" + str(threshold)+ "_tstr" + str(threshold_str) + "_m" + str(momentum) + "_wd" + str(weight_decay) + "_mlst" + milestones + "_Mscl" + str(M_scale)+ "_struct" + structs+'_id'+str(int(time())))
+                            "_t" + str(threshold)+ "_m" + str(momentum) + "_wd" + str(weight_decay) + "_mlst" + milestones + "_Mscl" + str(M_scale)+'_id'+str(int(time())))
 
                     save_dir = "saves/save_" + name
                     log_file = open("temp_logs/" + name, "w")
@@ -123,27 +124,26 @@ class Grid_Search():
                         torch.save(model.state_dict(),name + "rand_init.ph")
                         base_checkpoint=torch.load("saves/save_" + arch + "_" + dset + "_first_original/checkpoint.th")
                         model.load_state_dict(base_checkpoint['state_dict'])
-                        if structs == 'single_convs':
-                            M=at.layerwise_M(model, scale = M_scale) #a dictionary withe hte value of M for each layer of the model
-                        elif structs == 'convs_and_batchnorm':
-                             M=at.blockwise_M(model, scale = M_scale) 
+
+                        M=at.layerwise_M(model, scale = M_scale) #a dictionary withe hte value of M for each layer of the model
+
 
                         model.load_state_dict(torch.load(name  + "rand_init.ph"))
                         os.remove(name + "rand_init.ph")
 
-                        print("M values:\n",M)
+                        print("M vals:\n",M)
                         
-                        if 'perspReg' == reg_type:
-                            reg = pReg.PerspReg(alpha=alpha,M=M, option =structs, track_stats=track_stats)
+                        if 'perspBerhu' == reg_type:
+                            reg = bpreg.perspBerhu(alpha=alpha,M=M, track_stats=track_stats)
                         else: 
-                            reg = oReg.__dict__[reg_type](alpha,M,option=structs)
+                            reg = oReg.__dict__[reg_type](alpha,M,)
 
-                    else: reg = oReg.__dict__[reg_type](alpha,option=structs)
+                    else: reg = oReg.__dict__[reg_type](alpha)
 
 
 
                     
-                    trainer = Trainer(model = model, dataset = dataset, reg = reg, lamb = lamb, threshold = threshold, threshold_str = threshold_str, 
+                    trainer = Trainer(model = model, dataset = dataset, reg = reg, lamb = lamb, threshold = threshold, 
                                         criterion =criterion, optimizer = optimizer, lr_scheduler = lr_scheduler, save_dir = save_dir, save_every = save_every, print_freq = print_freq)
 
 
@@ -157,29 +157,29 @@ class Grid_Search():
 
                     #creating the actual pruned model
 
-                    model_pruned=archs.load_arch_pruned(arch, num_classes)
-                    qp.prune_thr(model_pruned,1.e-12)
-                    base_checkpoint=torch.load(save_dir+'/model_best_val.th')
-                    model_pruned.load_state_dict(base_checkpoint['state_dict'])
+                    # model_pruned=archs.load_arch_pruned(arch, num_classes)
+                    # qp.prune_thr(model_pruned,1.e-12)
+                    # base_checkpoint=torch.load(save_dir+'/model_best_val.th')
+                    # model_pruned.load_state_dict(base_checkpoint['state_dict'])
 
-                    model_pruned.eval()
+                    # model_pruned.eval()
 
-                    trainer_pr = Trainer(model = model_pruned, dataset = dataset, reg = reg, lamb = lamb, threshold = threshold, threshold_str = threshold_str, 
-                                        criterion =criterion, optimizer = None, lr_scheduler = lr_scheduler, save_dir = save_dir, save_every = save_every, print_freq = print_freq)
+                    # trainer_pr = Trainer(model = model_pruned, dataset = dataset, reg = reg, lamb = lamb, threshold = threshold,
+                    #                     criterion =criterion, optimizer = None, lr_scheduler = lr_scheduler, save_dir = save_dir, save_every = save_every, print_freq = print_freq)
 
-                    if 'Cifar' in dset:
-                        model_pruned(torch.rand([1,3,32,32]).cuda())
-                    else: 
-                        model_pruned(torch.rand([1,3,256,256]).cuda())
+                    # if 'Cifar' in dset:
+                    #     model_pruned(torch.rand([1,3,32,32]).cuda())
+                    # else: 
+                    #     model_pruned(torch.rand([1,3,256,256]).cuda())
 
-                    if 'resnet' in arch:
-                        en.compress_resnet(model_pruned)
-                    else:
-                        en.compress_vgg(model_pruned)
+                    # if 'resnet' in arch:
+                    #     en.compress_resnet(model_pruned)
+                    # else:
+                    #     en.compress_vgg(model_pruned)
 
-                    trainer_pr.validate(reg_on = False)
+                    # trainer_pr.validate(reg_on = False)
                     
-                    print(' Real pruned parameter ',en.par_count(model)-en.par_count(model_pruned))
+                    # print(' Real pruned parameter ',en.par_count(model)-en.par_count(model_pruned))
                     if track_stats:
                         print(' Reg cases stats ', reg.stats)
                     

@@ -17,13 +17,12 @@ BN_SRCH_ITER = 10
 
 class Trainer():
 
-    def __init__(self, model, dataset, reg, lamb, threshold, threshold_str, criterion, optimizer, lr_scheduler, save_dir, save_every,  print_freq):
+    def __init__(self, model, dataset, reg, lamb, threshold, criterion, optimizer, lr_scheduler, save_dir, save_every,  print_freq):
         self.model = model
         self.dataset = dataset
         self.reg = reg
         self.lamb = lamb
         self.threshold = threshold
-        self.threshold_str = threshold_str
         self.criterion = criterion
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
@@ -94,14 +93,14 @@ class Trainer():
 
         #recovering all pruned weights that are not in a pruned entity
         # self.binary_thr_struct_search(10)
-        qp.prune_struct(self.model,self.threshold_str)
+        # qp.prune_struct(self.model,self.threshold_str)
 
-        spars, tot_ = at.sparsityRate(self.model)
+        # spars, tot_ = at.sparsityRate(self.model)
         
 
-        print("\n Total parameter pruned after struct thresholding:", tot_p[0], "(unstructured)", tot_p[1],"(structured)\n")
+        # print("\n Total parameter pruned after struct thresholding:", tot_p[0], "(unstructured)", tot_p[1],"(structured)\n")
 
-        self.validate()
+        # self.validate()
         #Finetuning of the pruned model
         print("\n Total elapsed time ", datetime.now()-start,"\n FINETUNING\n")
         self.best_prec1 = 0
@@ -150,7 +149,7 @@ class Trainer():
 
 
 
-    def run_epoch(self, epoch, reg_on = True, print_grad = True):
+    def run_epoch(self, epoch, reg_on = True, print_grad = False):
         """
             Run one train epoch
         """
@@ -366,62 +365,6 @@ class Trainer():
 
         self.dataset["valid_loader"]=valid_loader_bck
         self.print_freq= print_freq_bkp
-
-        
-    def binary_thr_struct_search(self,iters):
-        self.model.eval()
-        device='cpu'
-        if torch.cuda.is_available():
-            device= 'cuda:0'
-        print('STRUCT THRESHOLDING')
-
-        a=0
-        b=1e-1
-        last_feas_thr=a
-        # breakpoint()
-        
-        valid_loader_bck = self.dataset["valid_loader"]
-        print_freq_bkp =self.print_freq
-        self.print_freq= int(1e10)
-        self.dataset["valid_loader"]=self.dataset["stable_train_loader"]
-        print('original accuracy')
-        original_acc = self.validate(reg_on=False)
-       
-        qp.prune_thr(self.model,1e-30)
-        self.validate(reg_on=False)
-
-        original_state = self.model.state_dict()
-        
-        for i in range(iters):
-            thr=a+(b-a)*0.5
-            print('current threshold ', thr)
-
-            qp.prune_struct(self.model,thr)
-            
-            acc = self.validate(reg_on=False)
-            
-            if original_acc-acc<self.threshold_str:
-                a=thr
-                last_feas_thr=thr
-            else:
-                b=thr
-                self.model.load_state_dict(original_state)
-                self.model(torch.rand([1,3,32,32]).to(device))
-                print('resuming')
-                self.validate(reg_on=False)
-
-        self.model.load_state_dict(original_state)
-        self.model(torch.rand([1,3,32,32]).to(device))
-
-        qp.prune_struct(self.model,last_feas_thr)
-        print('Final struct threshold ', last_feas_thr)
-        self.validate(reg_on=False)
-
-
-
-        self.dataset["valid_loader"]=valid_loader_bck
-        self.print_freq= print_freq_bkp
-
 
 
 
