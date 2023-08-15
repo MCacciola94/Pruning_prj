@@ -5,6 +5,7 @@ from torch.nn.utils import prune
 import torch
 import aux_tools as at
 import os
+import vit, vit_pruned
 # import torchvision.models as models
 
 model_names = sorted(name for name in resnet.__dict__
@@ -12,7 +13,7 @@ model_names = sorted(name for name in resnet.__dict__
                      and name.startswith("resnet")
                      and callable(resnet.__dict__[name]))
 
-available_arcs= model_names + ["resnet18", "resnet50", "vgg16"]
+available_arcs= model_names + ["resnet18", "resnet50", "vgg16", 'ViTsmall']
 
 def is_available(name):
     return name in available_arcs
@@ -28,6 +29,8 @@ def load_arch(name, num_classes, resume = "", already_pruned = True):
         else:
             if "vgg" in name:
                 model = vgg.__dict__[name]()
+            elif 'ViT' in name:
+                model = vit.__dict__[name]()
             else:
                 model = resnetBig.__dict__[name](num_classes)
     else:
@@ -74,6 +77,8 @@ def load_arch_pruned(name, num_classes, resume = "", already_pruned = True):
         else:
             if "vgg" in name:
                 model = vgg_pruned.__dict__[name]()
+            elif 'ViT' in name:
+                model = vit_pruned.__dict__[name]()
             else:
                 model = resnetBig_pruned.__dict__[name](num_classes)
     else:
