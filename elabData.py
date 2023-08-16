@@ -36,17 +36,23 @@ def create_csv(path = "logs/resnet20"):
 
 
         i = 1
-        while not('Real pruned parameter' in ls[-i]):
-            i = i+1
+        # while not('Real pruned parameter' in ls[-i]):
+        #     i = i+1
 
-        s = ls[-i].split()
-        table_cols["Sparsity"].append(s[3])
+        # s = ls[-i].split()
+        # table_cols["Sparsity"].append(s[3])
 
         while not('Best accuracy:' in ls[-i]):
             i = i+1
 
         s = ls[-i].split()
         table_cols["Final_Accuracy"].append(s[2])
+
+        while not('Total parameter pruned:' in ls[-i]):
+            i = i+1
+
+        s = ls[-i].split()
+        table_cols["Sparsity"].append(s[3])
 
 
         while not('Elapsed time' in ls[-i]):

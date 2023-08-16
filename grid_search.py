@@ -179,7 +179,7 @@ class Grid_Search():
 
                     # trainer_pr.validate(reg_on = False)
                     
-                    # print(' Real pruned parameter ',en.par_count(model)-en.par_count(model_pruned))
+                    print(' Real pruned parameter ',en.pruned_par(model))
                     if track_stats:
                         print(' Reg cases stats ', reg.stats)
                     
