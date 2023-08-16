@@ -7,3 +7,5 @@ nohup.out
 temp_logs/
 logs/
 __pycache__/
+*.ini
+*.sh
