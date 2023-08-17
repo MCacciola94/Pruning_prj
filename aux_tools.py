@@ -171,7 +171,7 @@ def blockwise_M(net, const = False, scale = 1.0):
         return Mdict
 
 def noReg(net, loss, lamb=0.1):
-    return loss,0
+    return torch.Tensor([0]).cuda().sum()
 
 
 def incompatible_sum(self,t1,t2,rm_idxs1,rm_idxs2):
