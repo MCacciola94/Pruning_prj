@@ -163,6 +163,7 @@ def perspregcase3(alpha,M, option= 'convs_and_batchnorm'):
 class l1reg: 
     def __init__(self,alpha):
         self.alpha=alpha
+        self.stats=[]
     #Computation of the current factor
     def __call__(self,net, lamb = 0.1):
 
