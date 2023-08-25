@@ -190,3 +190,32 @@ class l1reg:
                 
 
         return reg/tot
+
+
+class l1naive: 
+    def __init__(self,alpha):
+        self.stats=[]
+    #Computation of the current factor
+    def __call__(self,net, lamb = 0.1):
+
+        reg= self.compute_by_convs(net)
+
+
+        return lamb* reg
+
+    def l1_computation(self,weigths):
+        l1pen = torch.norm(weigths,p=1)
+        return l1pen
+
+    def compute_by_convs(self,net):
+        reg = 0  
+        tot=0  
+
+        for m in net.modules():
+            if isinstance(m,torch.nn.Conv2d):
+                group = m.weight
+                tot+= group.numel()
+                reg+=self.l1_computation(group.reshape(group.numel()))
+                
+
+        return reg/tot
