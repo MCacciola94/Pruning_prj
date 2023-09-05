@@ -108,7 +108,7 @@ class Grid_Search():
                     # define loss function (criterion) and optimizer
                     criterion = nn.CrossEntropyLoss().cuda()
 
-
+                    
                     optimizer = torch.optim.SGD(model.parameters(), lr,
                                                 momentum=momentum,
                                                 weight_decay=weight_decay)

@@ -36,13 +36,19 @@ class Trainer():
         self.print_freq = print_freq
 
         self.top5_comp = False
+
+        if 'naive' in str(type(reg)):
+           
+            d = self.optimizer.state_dict()
+            self.wd = d['param_groups'][0]['weight_decay']
+            d['param_groups'][0]['weight_decay'] = 0.0 
+            self.optimizer.load_state_dict(d)
         
 
 
     def train(self, epochs, finetuning_epochs):
         # Starting time
         start=datetime.now()        
-  
         for epoch in range(epochs):
 
             # train for one epoch
@@ -104,6 +110,12 @@ class Trainer():
         #Finetuning of the pruned model
         print("\n Total elapsed time ", datetime.now()-start,"\n FINETUNING\n")
         self.best_prec1 = 0
+
+        if 'naive' in str(type(self.reg)):
+           
+            d = self.optimizer.state_dict()
+            d['param_groups'][0]['weight_decay'] = self.wd
+            self.optimizer.load_state_dict(d)
 
 
         for epoch in range(epochs, epochs + finetuning_epochs):
